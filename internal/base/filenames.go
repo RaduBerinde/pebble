@@ -43,6 +43,7 @@ func MakeFilename(fileType FileType, fileNum FileNum) string {
 	case FileTypeLock:
 		return "LOCK"
 	case FileTypeTable:
+		panic("nooo")
 		return fmt.Sprintf("%s.sst", fileNum)
 	case FileTypeManifest:
 		return fmt.Sprintf("MANIFEST-%s", fileNum)

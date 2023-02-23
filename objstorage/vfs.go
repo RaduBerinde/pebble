@@ -5,12 +5,22 @@
 package objstorage
 
 import (
+	"fmt"
+
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/vfs"
 )
 
 func (p *Provider) vfsPath(fileType base.FileType, fileNum base.FileNum) string {
-	return base.MakeFilepath(p.st.FS, p.st.FSDirName, fileType, fileNum)
+	var basename string
+	switch fileType {
+	case base.FileTypeTable:
+		basename = fmt.Sprintf("%s.sst", fileNum)
+	default:
+		panic(errors.AssertionFailedf("unknown object file type %d", fileType))
+	}
+	return p.st.FS.PathJoin(p.st.FSDirName, basename)
 }
 
 func (p *Provider) vfsOpenForReading(
