@@ -67,9 +67,9 @@ func (d *dbT) runIOBench(cmd *cobra.Command, args []string) {
 
 	ios := genBenchIOs(stdout, readables, d.ioCount, ioSizes)
 
-	levels := "L5,L6"
-	if d.allLevels {
-		levels = "all"
+	levels := "all"
+	if d.onlyL5L6 {
+		levels = "L5,L6"
 	}
 	fmt.Fprintf(stdout, "IO count: %d  Parallelism: %d  Levels: %s\n", d.ioCount, d.ioParallelism, levels)
 
@@ -178,9 +178,9 @@ func (d *dbT) openBenchTables(db *pebble.DB) ([]objstorage.Readable, error) {
 	if err != nil {
 		return nil, err
 	}
-	startLevel := 5
-	if d.allLevels {
-		startLevel = 0
+	startLevel := 0
+	if d.onlyL5L6 {
+		startLevel = 5
 	}
 
 	var nums []base.DiskFileNum

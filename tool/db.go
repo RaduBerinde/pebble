@@ -52,7 +52,7 @@ type dbT struct {
 	start         key
 	end           key
 	count         int64
-	allLevels     bool
+	onlyL5L6      bool
 	ioCount       int
 	ioParallelism int
 	ioSizes       string
@@ -194,7 +194,7 @@ specified database.
 		&d.count, "count", 0, "key count for scan (0 is unlimited)")
 
 	d.IOBench.Flags().BoolVar(
-		&d.allLevels, "all-levels", false, "if set, benchmark all levels (default is only L5/L6)")
+		&d.onlyL5L6, "only-l5-l6", false, "if set, benchmark all levels (default is only L5/L6)")
 	d.IOBench.Flags().IntVar(
 		&d.ioCount, "io-count", 10000, "number of IOs (per IO size) to benchmark")
 	d.IOBench.Flags().IntVar(
