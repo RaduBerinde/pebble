@@ -75,7 +75,7 @@ func TestProvider(t *testing.T) {
 				// Checking refs on open affects the test output. We don't want tests to
 				// only pass when the `invariants` tag is used, so unconditionally
 				// enable ref checking on open.
-				p.(*provider).shared.checkRefsOnOpen = true
+				p.(*provider).remote.checkRefsOnOpen = true
 				providers[fsDir] = p
 				curProvider = p
 

@@ -11,7 +11,7 @@ import (
 	"github.com/cockroachdb/pebble/objstorage"
 )
 
-// sharedObjectName returns the name of an object on shared storage.
+// sharedObjectName returns the name of an object on remote storage.
 //
 // For sstables, the format is: <hash>-<creator-id>-<file-num>.sst
 // For example: 1a3f-2-000001.sst
@@ -78,7 +78,7 @@ func (p *provider) sharedObjectRefName(meta objstorage.ObjectMetadata) string {
 	if meta.Remote.CleanupMethod != objstorage.SharedRefTracking {
 		panic("ref object used when ref tracking disabled")
 	}
-	return sharedObjectRefName(meta, p.shared.creatorID, meta.DiskFileNum)
+	return sharedObjectRefName(meta, p.remote.creatorID, meta.DiskFileNum)
 }
 
 // objHash returns a 16-bit hash value derived from the creator ID and creator

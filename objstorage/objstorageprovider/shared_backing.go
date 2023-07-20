@@ -45,7 +45,7 @@ func (p *provider) encodeSharedObjectBacking(
 	meta *objstorage.ObjectMetadata,
 ) (objstorage.RemoteObjectBacking, error) {
 	if !meta.IsRemote() {
-		return nil, errors.AssertionFailedf("object %s not on shared storage", meta.DiskFileNum)
+		return nil, errors.AssertionFailedf("object %s not on remote storage", meta.DiskFileNum)
 	}
 
 	buf := make([]byte, 0, binary.MaxVarintLen64*4)
@@ -58,7 +58,7 @@ func (p *provider) encodeSharedObjectBacking(
 	buf = binary.AppendUvarint(buf, uint64(meta.Remote.CleanupMethod))
 	if meta.Remote.CleanupMethod == objstorage.SharedRefTracking {
 		buf = binary.AppendUvarint(buf, tagRefCheckID)
-		buf = binary.AppendUvarint(buf, uint64(p.shared.creatorID))
+		buf = binary.AppendUvarint(buf, uint64(p.remote.creatorID))
 		buf = binary.AppendUvarint(buf, uint64(meta.DiskFileNum.FileNum()))
 	}
 	if meta.Remote.Locator != "" {
@@ -130,7 +130,7 @@ type decodedBacking struct {
 	}
 }
 
-// decodeSharedObjectBacking decodes the shared object metadata.
+// decodeSharedObjectBacking decodes the remote object metadata.
 //
 // Note that the meta.Remote.Storage field is not set.
 func decodeSharedObjectBacking(

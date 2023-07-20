@@ -30,20 +30,20 @@ type provider struct {
 
 	tracer *objiotracing.Tracer
 
-	shared sharedSubsystem
+	remote remoteSubsystem
 
 	mu struct {
 		sync.RWMutex
 
 		shared struct {
-			// catalogBatch accumulates shared object creations and deletions until
+			// catalogBatch accumulates remote object creations and deletions until
 			// Sync is called.
 			catalogBatch remoteobjcat.Batch
 
 			storageObjects map[remote.Locator]remote.Storage
 		}
 
-		// localObjectsChanged is set if non-shared objects were created or deleted
+		// localObjectsChanged is set if non-remote objects were created or deleted
 		// but Sync was not yet called.
 		localObjectsChanged bool
 
@@ -91,7 +91,7 @@ type Settings struct {
 	// out a large chunk of dirty filesystem buffers.
 	BytesPerSync int
 
-	// Fields here are set only if the provider is to support shared objects
+	// Fields here are set only if the provider is to support remote objects
 	// (experimental).
 	Shared struct {
 		StorageFactory remote.StorageFactory
@@ -103,7 +103,7 @@ type Settings struct {
 		CreateOnSharedLocator remote.Locator
 
 		// CacheSizeBytes is the size of the on-disk block cache for objects
-		// on shared storage. If it is 0, no cache is used.
+		// on remote storage. If it is 0, no cache is used.
 		CacheSizeBytes int64
 
 		// CacheBlockSize is the block size of the cache; if 0, the default of 32KB is used.
@@ -128,7 +128,7 @@ type Settings struct {
 	}
 }
 
-// DefaultSettings initializes default settings (with no shared storage),
+// DefaultSettings initializes default settings (with no remote storage),
 // suitable for tests and tools.
 func DefaultSettings(fs vfs.FS, dirName string) Settings {
 	return Settings{
@@ -174,8 +174,8 @@ func open(settings Settings) (p *provider, _ error) {
 		return nil, err
 	}
 
-	// Initialize shared subsystem (if configured) and add shared objects.
-	if err := p.sharedInit(); err != nil {
+	// Initialize remote subsystem (if configured) and add remote objects.
+	if err := p.remoteInit(); err != nil {
 		return nil, err
 	}
 
@@ -260,8 +260,8 @@ func (p *provider) Create(
 
 // Remove removes an object.
 //
-// Note that if the object is shared, the object is only (conceptually) removed
-// from this provider. If other providers have references on the shared object,
+// Note that if the object is remote, the object is only (conceptually) removed
+// from this provider. If other providers have references on the remote object,
 // it will not be removed.
 //
 // The object is not guaranteed to be durably removed until Sync is called.
@@ -476,7 +476,7 @@ func (p *provider) removeMetadata(fileNum base.DiskFileNum) {
 	}
 }
 
-// protectObject prevents the unreferencing of a shared object until
+// protectObject prevents the unreferencing of a remote object until
 // unprotectObject is called.
 func (p *provider) protectObject(fileNum base.DiskFileNum) {
 	p.mu.Lock()

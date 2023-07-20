@@ -19,49 +19,53 @@ import (
 	"github.com/cockroachdb/pebble/objstorage/remote"
 )
 
-// sharedSubsystem contains the provider fields related to shared storage.
-// All fields remain unset if shared storage is not configured.
-type sharedSubsystem struct {
+// remoteSubsystem contains the provider fields related to remote storage.
+// All fields remain unset if remote storage is not configured.
+type remoteSubsystem struct {
 	catalog *remoteobjcat.Catalog
 	cache   *sharedcache.Cache
 
-	// checkRefsOnOpen controls whether we check the ref marker file when opening
-	// an object. Normally this is true when invariants are enabled (but the provider
-	// test tweaks this field).
-	checkRefsOnOpen bool
+	// shared contains the fields relevant to shared objects, i.e. objects that
+	// are created by Pebble and potentially shared between Pebble instances.
+	shared struct {
+		// initialized guards access to the creatorID field.
+		initialized atomic.Bool
+		creatorID   objstorage.CreatorID
+		initOnce    sync.Once
 
-	// initialized guards access to the creatorID field.
-	initialized atomic.Bool
-	creatorID   objstorage.CreatorID
-	initOnce    sync.Once
+		// checkRefsOnOpen controls whether we check the ref marker file when opening
+		// an object. Normally this is true when invariants are enabled (but the provider
+		// test tweaks this field).
+		checkRefsOnOpen bool
+	}
 }
 
-func (ss *sharedSubsystem) init(creatorID objstorage.CreatorID) {
-	ss.initOnce.Do(func() {
-		ss.creatorID = creatorID
-		ss.initialized.Store(true)
+func (ss *remoteSubsystem) initShared(creatorID objstorage.CreatorID) {
+	ss.shared.initOnce.Do(func() {
+		ss.shared.creatorID = creatorID
+		ss.shared.initialized.Store(true)
 	})
 }
 
-// sharedInit initializes the shared object subsystem (if configured) and finds
-// any shared objects.
-func (p *provider) sharedInit() error {
+// remoteInit initializes the remote object subsystem (if configured) and finds
+// any remote objects.
+func (p *provider) remoteInit() error {
 	if p.st.Shared.StorageFactory == nil {
 		return nil
 	}
 	catalog, contents, err := remoteobjcat.Open(p.st.FS, p.st.FSDirName)
 	if err != nil {
-		return errors.Wrapf(err, "pebble: could not open shared object catalog")
+		return errors.Wrapf(err, "pebble: could not open remote object catalog")
 	}
-	p.shared.catalog = catalog
-	p.shared.checkRefsOnOpen = invariants.Enabled
+	p.remote.catalog = catalog
+	p.remote.checkRefsOnOpen = invariants.Enabled
 
 	// The creator ID may or may not be initialized yet.
 	if contents.CreatorID.IsSet() {
-		p.shared.init(contents.CreatorID)
+		p.remote.initShared(contents.CreatorID)
 		p.st.Logger.Infof("shared storage configured; creatorID = %s", contents.CreatorID)
 	} else {
-		p.st.Logger.Infof("shared storage configured; no creatorID yet")
+		p.st.Logger.Infof("remote storage configured; no creatorID yet")
 	}
 
 	if p.st.Shared.CacheSizeBytes > 0 {
@@ -82,10 +86,10 @@ func (p *provider) sharedInit() error {
 			numShards = 2 * runtime.GOMAXPROCS(0)
 		}
 
-		p.shared.cache, err = sharedcache.Open(
+		p.remote.cache, err = sharedcache.Open(
 			p.st.FS, p.st.Logger, p.st.FSDirName, blockSize, shardingBlockSize, p.st.Shared.CacheSizeBytes, numShards)
 		if err != nil {
-			return errors.Wrapf(err, "pebble: could not open shared object cache")
+			return errors.Wrapf(err, "pebble: could not open remote object cache")
 		}
 	}
 
@@ -116,13 +120,13 @@ func (p *provider) sharedClose() error {
 		return nil
 	}
 	var err error
-	if p.shared.cache != nil {
-		err = p.shared.cache.Close()
-		p.shared.cache = nil
+	if p.remote.cache != nil {
+		err = p.remote.cache.Close()
+		p.remote.cache = nil
 	}
-	if p.shared.catalog != nil {
-		err = firstError(err, p.shared.catalog.Close())
-		p.shared.catalog = nil
+	if p.remote.catalog != nil {
+		err = firstError(err, p.remote.catalog.Close())
+		p.remote.catalog = nil
 	}
 	return err
 }
@@ -130,33 +134,33 @@ func (p *provider) sharedClose() error {
 // SetCreatorID is part of the objstorage.Provider interface.
 func (p *provider) SetCreatorID(creatorID objstorage.CreatorID) error {
 	if p.st.Shared.StorageFactory == nil {
-		return errors.AssertionFailedf("attempt to set CreatorID but shared storage not enabled")
+		return errors.AssertionFailedf("attempt to set CreatorID but remote storage not enabled")
 	}
 	// Note: this call is a cheap no-op if the creator ID was already set. This
 	// call also checks if we are trying to change the ID.
-	if err := p.shared.catalog.SetCreatorID(creatorID); err != nil {
+	if err := p.remote.catalog.SetCreatorID(creatorID); err != nil {
 		return err
 	}
-	if !p.shared.initialized.Load() {
+	if !p.remote.initialized.Load() {
 		p.st.Logger.Infof("shared storage creatorID set to %s", creatorID)
-		p.shared.init(creatorID)
+		p.remote.initShared(creatorID)
 	}
 	return nil
 }
 
 // IsForeign is part of the objstorage.Provider interface.
 func (p *provider) IsForeign(meta objstorage.ObjectMetadata) bool {
-	if !p.shared.initialized.Load() {
+	if !p.remote.initialized.Load() {
 		return false
 	}
-	return meta.IsRemote() && (meta.Remote.CustomObjectName != "" || meta.Remote.CreatorID != p.shared.creatorID)
+	return meta.IsRemote() && (meta.Remote.CustomObjectName != "" || meta.Remote.CreatorID != p.remote.creatorID)
 }
 
 func (p *provider) sharedCheckInitialized() error {
 	if p.st.Shared.StorageFactory == nil {
-		return errors.Errorf("shared object support not configured")
+		return errors.Errorf("remote object support not configured")
 	}
-	if !p.shared.initialized.Load() {
+	if !p.remote.initialized.Load() {
 		return errors.Errorf("shared object support not available: shared creator ID not yet set")
 	}
 	return nil
@@ -175,7 +179,7 @@ func (p *provider) sharedSync() error {
 		return nil
 	}
 
-	err := p.shared.catalog.ApplyBatch(batch)
+	err := p.remote.catalog.ApplyBatch(batch)
 	if err != nil {
 		// We have to put back the batch (for the next Sync).
 		p.mu.Lock()
@@ -189,7 +193,7 @@ func (p *provider) sharedSync() error {
 }
 
 func (p *provider) sharedPath(meta objstorage.ObjectMetadata) string {
-	return "shared://" + sharedObjectName(meta)
+	return "remote://" + sharedObjectName(meta)
 }
 
 // sharedCreateRef creates a reference marker object.
@@ -227,7 +231,7 @@ func (p *provider) sharedCreate(
 		DiskFileNum: fileNum,
 		FileType:    fileType,
 	}
-	meta.Remote.CreatorID = p.shared.creatorID
+	meta.Remote.CreatorID = p.remote.creatorID
 	meta.Remote.CreatorFileNum = fileNum
 	meta.Remote.CleanupMethod = opts.SharedCleanupMethod
 	meta.Remote.Locator = locator
@@ -253,7 +257,7 @@ func (p *provider) sharedOpenForReading(
 	}
 	// Verify we have a reference on this object; for performance reasons, we only
 	// do this in testing scenarios.
-	if p.shared.checkRefsOnOpen && meta.Remote.CleanupMethod == objstorage.SharedRefTracking {
+	if p.remote.checkRefsOnOpen && meta.Remote.CleanupMethod == objstorage.SharedRefTracking {
 		refName := p.sharedObjectRefName(meta)
 		if _, err := meta.Remote.Storage.Size(refName); err != nil {
 			if meta.Remote.Storage.IsNotExistError(err) {
@@ -286,7 +290,7 @@ func (p *provider) sharedSize(meta objstorage.ObjectMetadata) (int64, error) {
 	return meta.Remote.Storage.Size(objName)
 }
 
-// sharedUnref implements object "removal" with the shared backend. The ref
+// sharedUnref implements object "removal" with the remote backend. The ref
 // marker object is removed and the backing object is removed only if there are
 // no other ref markers.
 func (p *provider) sharedUnref(meta objstorage.ObjectMetadata) error {

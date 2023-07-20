@@ -48,12 +48,12 @@ func (r *sharedReadable) ReadAt(ctx context.Context, p []byte, offset int64) err
 func (r *sharedReadable) readInternal(
 	ctx context.Context, p []byte, offset int64, forCompaction bool,
 ) error {
-	if cache := r.provider.shared.cache; cache != nil {
+	if cache := r.provider.remote.cache; cache != nil {
 		flags := sharedcache.ReadFlags{
 			// Don't add data to the cache if this read is for a compaction.
 			ReadOnly: forCompaction,
 		}
-		return r.provider.shared.cache.ReadAt(ctx, r.fileNum, p, offset, r.objReader, r.size, flags)
+		return r.provider.remote.cache.ReadAt(ctx, r.fileNum, p, offset, r.objReader, r.size, flags)
 	}
 	return r.objReader.ReadAt(ctx, p, offset)
 }
