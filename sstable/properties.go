@@ -16,48 +16,13 @@ import (
 	"github.com/cockroachdb/pebble/internal/intern"
 )
 
-const propertiesBlockRestartInterval = math.MaxInt32
-const propGlobalSeqnumName = "rocksdb.external_sst_file.global_seqno"
+//go:generate go run gen/properties_gen.go
 
-var propTagMap = make(map[string]reflect.StructField)
+const propertiesBlockRestartInterval = math.MaxInt32
+const PropGlobalSeqnumName = "rocksdb.external_sst_file.global_seqno"
+
 var propBoolTrue = []byte{'1'}
 var propBoolFalse = []byte{'0'}
-
-var propOffsetTagMap = make(map[uintptr]string)
-
-func generateTagMaps(t reflect.Type) {
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		if f.Type.Kind() == reflect.Struct {
-			if tag := f.Tag.Get("prop"); i == 0 && tag == "pebble.embbeded_common_properties" {
-				// CommonProperties struct embedded in Properties. Note that since
-				// CommonProperties is placed at the top of properties we can use
-				// the offsets of the fields within CommonProperties to determine
-				// the offsets of those fields within Properties.
-				generateTagMaps(f.Type)
-				continue
-			}
-			panic("pebble: unknown struct type in Properties")
-		}
-		if tag := f.Tag.Get("prop"); tag != "" {
-			switch f.Type.Kind() {
-			case reflect.Bool:
-			case reflect.Uint32:
-			case reflect.Uint64:
-			case reflect.String:
-			default:
-				panic(fmt.Sprintf("unsupported property field type: %s %s", f.Name, f.Type))
-			}
-			propTagMap[tag] = f
-			propOffsetTagMap[f.Offset] = tag
-		}
-	}
-}
-
-func init() {
-	t := reflect.TypeOf(Properties{})
-	generateTagMaps(t)
-}
 
 // CommonProperties holds properties for either a virtual or a physical sstable. This
 // can be used by code which doesn't care to make the distinction between physical
@@ -272,37 +237,17 @@ func (p *Properties) load(
 		return err
 	}
 	p.Loaded = make(map[uintptr]struct{})
-	v := reflect.ValueOf(p).Elem()
 	for valid := i.First(); valid; valid = i.Next() {
-		if f, ok := propTagMap[string(i.Key().UserKey)]; ok {
-			p.Loaded[f.Offset] = struct{}{}
-			field := v.FieldByName(f.Name)
-			switch f.Type.Kind() {
-			case reflect.Bool:
-				field.SetBool(bytes.Equal(i.Value(), propBoolTrue))
-			case reflect.Uint32:
-				field.SetUint(uint64(binary.LittleEndian.Uint32(i.Value())))
-			case reflect.Uint64:
-				var n uint64
-				if string(i.Key().UserKey) == propGlobalSeqnumName {
-					n = binary.LittleEndian.Uint64(i.Value())
-				} else {
-					n, _ = binary.Uvarint(i.Value())
-				}
-				field.SetUint(n)
-			case reflect.String:
-				field.SetString(intern.Bytes(i.Value()))
-			default:
-				panic("not reached")
+		tagBytes := i.Key().UserKey
+		tag := unsafe.String(&tagBytes[0], len(tagBytes))
+		if !p.loadField(tag, i.Value(), p.Loaded) {
+			if p.UserProperties == nil {
+				p.UserProperties = make(map[string]string)
 			}
-			continue
-		}
-		if p.UserProperties == nil {
-			p.UserProperties = make(map[string]string)
-		}
 
-		if _, denied := deniedUserProperties[string(i.Key().UserKey)]; !denied {
-			p.UserProperties[intern.Bytes(i.Key().UserKey)] = string(i.Value())
+			if _, denied := deniedUserProperties[string(i.Key().UserKey)]; !denied {
+				p.UserProperties[intern.Bytes(i.Key().UserKey)] = string(i.Value())
+			}
 		}
 	}
 	return nil
