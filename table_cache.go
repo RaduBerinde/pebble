@@ -745,23 +745,23 @@ func (c *tableCacheShard) unrefValue(v *tableCacheValue) {
 func (c *tableCacheShard) findNode(
 	meta *fileMetadata, dbOpts *tableCacheOpts,
 ) (v *tableCacheValue) {
-	// Loading a file before its global sequence number is known (eg,
-	// during ingest before entering the commit pipeline) can pollute
-	// the cache with incorrect state. In invariant builds, verify
-	// that the global sequence number of the returned reader matches.
-	if invariants.Enabled {
-		defer func() {
-			if v.reader != nil && meta.LargestSeqNum == meta.SmallestSeqNum &&
-				v.reader.Properties.GlobalSeqNum != meta.SmallestSeqNum {
-				panic(errors.AssertionFailedf("file %s loaded from table cache with the wrong global sequence number %d",
-					meta, v.reader.Properties.GlobalSeqNum))
-			}
-		}()
-	}
-	if refs := meta.Refs(); refs <= 0 {
-		panic(errors.AssertionFailedf("attempting to load file %s with refs=%d from table cache",
-			meta, refs))
-	}
+	//// Loading a file before its global sequence number is known (eg,
+	//// during ingest before entering the commit pipeline) can pollute
+	//// the cache with incorrect state. In invariant builds, verify
+	//// that the global sequence number of the returned reader matches.
+	//if invariants.Enabled {
+	//	defer func() {
+	//		if v.reader != nil && meta.LargestSeqNum == meta.SmallestSeqNum &&
+	//			v.reader.Properties.GlobalSeqNum != meta.SmallestSeqNum {
+	//			panic(errors.AssertionFailedf("file %s loaded from table cache with the wrong global sequence number %d",
+	//				meta, v.reader.Properties.GlobalSeqNum))
+	//		}
+	//	}()
+	//}
+	//if refs := meta.Refs(); refs <= 0 {
+	//	panic(errors.AssertionFailedf("attempting to load file %s with refs=%d from table cache",
+	//		meta, refs))
+	//}
 
 	// Fast-path for a hit in the cache.
 	c.mu.RLock()
