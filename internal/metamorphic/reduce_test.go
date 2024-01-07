@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cockroachdb/pebble/metamorphic"
 	"github.com/stretchr/testify/require"
 )
 
@@ -192,6 +193,22 @@ func (r *reducer) Run(t *testing.T) {
 				i = -1
 			}
 		}
+	}
+	// Try to simplify the keys.
+	opsData := strings.Join(ops, "\n")
+	newOpsData, err := metamorphic.TryToSimplifyKeys([]byte(opsData))
+	require.NoError(t, err)
+	o := strings.Split(strings.TrimSpace(string(newOpsData)), "\n")
+	if r.try(t, o) {
+		ops = o
+	}
+	// Try to generate a diagram.
+	diagram, err := metamorphic.TryToGenerateDiagram([]byte(opsData))
+	require.NoError(t, err)
+	if diagram != " " {
+		diagramPath := filepath.Join(r.lastSavedDir, "diagram")
+		require.NoError(t, os.WriteFile(diagramPath, []byte(diagram), 0644))
+		t.Logf("  Diagram: %s", diagramPath)
 	}
 }
 
