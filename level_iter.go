@@ -1063,42 +1063,55 @@ func (l *levelIter) skipEmptyFileForward() (*InternalKey, base.LazyValue) {
 				// bounds.
 				return nil, base.LazyValue{}
 			}
-			// If the boundary is a range deletion tombstone, return that key.
-			if l.iterFile.LargestPointKey.Kind() == InternalKeyKindRangeDelete {
-				l.largestBoundary = &l.iterFile.LargestPointKey
-				if l.boundaryContext != nil {
-					l.boundaryContext.isIgnorableBoundaryKey = true
-				}
-				return l.largestBoundary, base.LazyValue{}
-			}
-			// If the last point iterator positioning op might've skipped keys,
-			// it's possible the file's range deletions are still relevant to
-			// other levels. Return the largest boundary as a special ignorable
-			// marker to avoid advancing to the next file.
-			//
-			// The sstable iterator cannot guarantee that keys were skipped. A
-			// SeekGE that lands on a index separator k only knows that the
-			// block at the index entry contains keys ≤ k. We can't know whether
-			// there were actually keys between the seek key and the index
-			// separator key. If the block is then excluded due to block
-			// property filters, the iterator does not know whether keys were
-			// actually skipped by the block's exclusion.
-			//
-			// Since MaybeFilteredKeys cannot guarantee that keys were skipped,
-			// it's possible l.iterFile.Largest was already returned. Returning
-			// l.iterFile.Largest again is a violation of the strict
-			// monotonicity normally provided. The mergingIter's heap can
-			// tolerate this repeat key and in this case will keep the level at
-			// the top of the heap and immediately skip the entry, advancing to
-			// the next file.
-			if *l.rangeDelIterPtr != nil && l.filteredIter != nil &&
-				l.filteredIter.MaybeFilteredKeys() {
+			if *l.rangeDelIterPtr != nil && l.iterFile.Largest.IsExclusiveSentinel() {
+				//l.syntheticBoundary.UserKey = l.iterFile.Largest.UserKey
+				//l.syntheticBoundary.Trailer = InternalKeyRangeDeleteSentinel
+				//l.largestBoundary = &l.syntheticBoundary
+				//if l.boundaryContext != nil {
+				//	l.boundaryContext.isIgnorableBoundaryKey = true
+				//}
 				l.largestBoundary = &l.iterFile.Largest
 				if l.boundaryContext != nil {
 					l.boundaryContext.isIgnorableBoundaryKey = true
 				}
 				return l.largestBoundary, base.LazyValue{}
 			}
+			//// If the boundary is a range deletion tombstone, return that key.
+			//if l.iterFile.LargestPointKey.Kind() == InternalKeyKindRangeDelete {
+			//	l.largestBoundary = &l.iterFile.LargestPointKey
+			//	if l.boundaryContext != nil {
+			//		l.boundaryContext.isIgnorableBoundaryKey = true
+			//	}
+			//	return l.largestBoundary, base.LazyValue{}
+			//}
+			//// If the last point iterator positioning op might've skipped keys,
+			//// it's possible the file's range deletions are still relevant to
+			//// other levels. Return the largest boundary as a special ignorable
+			//// marker to avoid advancing to the next file.
+			////
+			//// The sstable iterator cannot guarantee that keys were skipped. A
+			//// SeekGE that lands on a index separator k only knows that the
+			//// block at the index entry contains keys ≤ k. We can't know whether
+			//// there were actually keys between the seek key and the index
+			//// separator key. If the block is then excluded due to block
+			//// property filters, the iterator does not know whether keys were
+			//// actually skipped by the block's exclusion.
+			////
+			//// Since MaybeFilteredKeys cannot guarantee that keys were skipped,
+			//// it's possible l.iterFile.Largest was already returned. Returning
+			//// l.iterFile.Largest again is a violation of the strict
+			//// monotonicity normally provided. The mergingIter's heap can
+			//// tolerate this repeat key and in this case will keep the level at
+			//// the top of the heap and immediately skip the entry, advancing to
+			//// the next file.
+			//if *l.rangeDelIterPtr != nil && l.filteredIter != nil &&
+			//	l.filteredIter.MaybeFilteredKeys() {
+			//	l.largestBoundary = &l.iterFile.Largest
+			//	if l.boundaryContext != nil {
+			//		l.boundaryContext.isIgnorableBoundaryKey = true
+			//	}
+			//	return l.largestBoundary, base.LazyValue{}
+			//}
 		}
 
 		// Current file was exhausted. Move to the next file.
