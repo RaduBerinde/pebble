@@ -164,7 +164,9 @@ func (i *twoLevelIterator) init(
 	if v != nil {
 		i.vState = v
 		// Note that upper is exclusive here.
-		i.endKeyInclusive, lower, upper = v.constrainBounds(lower, upper, false /* endInclusive */)
+		i.endKeyInclusive, lower, upper = v.constrainBounds(
+			lower, upper, false /* endInclusive */, transforms.PrefixReplacement,
+		)
 	}
 
 	i.inPool = false

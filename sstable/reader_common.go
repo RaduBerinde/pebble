@@ -42,7 +42,9 @@ type CommonReader interface {
 		bufferPool *BufferPool,
 	) (Iterator, error)
 
-	EstimateDiskUsage(start, end []byte) (uint64, error)
+	// EstimateDiskUsage takes a transforms argument because it can affect how the
+	// start and end keys are interpreted (e.g. prefix replacement).
+	EstimateDiskUsage(transforms IterTransforms, start, end []byte) (uint64, error)
 
 	CommonProperties() *CommonProperties
 }
@@ -54,8 +56,9 @@ type CommonReader interface {
 // preferable.
 type IterTransforms struct {
 	SyntheticSeqNum    SyntheticSeqNum
-	HideObsoletePoints bool
+	PrefixReplacement  *PrefixReplacement
 	SyntheticSuffix    SyntheticSuffix
+	HideObsoletePoints bool
 }
 
 // NoTransforms is the default value for IterTransforms.

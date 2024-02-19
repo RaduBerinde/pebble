@@ -251,7 +251,7 @@ func (c *tableCacheContainer) estimateSize(
 		err = c.withVirtualReader(
 			meta.VirtualMeta(),
 			func(r sstable.VirtualReader) (err error) {
-				size, err = r.EstimateDiskUsage(lower, upper)
+				size, err = r.EstimateDiskUsage(meta.IterTransforms(), lower, upper)
 				return err
 			},
 		)
@@ -259,7 +259,7 @@ func (c *tableCacheContainer) estimateSize(
 		err = c.withReader(
 			meta.PhysicalMeta(),
 			func(r *sstable.Reader) (err error) {
-				size, err = r.EstimateDiskUsage(lower, upper)
+				size, err = r.EstimateDiskUsage(meta.IterTransforms(), lower, upper)
 				return err
 			},
 		)

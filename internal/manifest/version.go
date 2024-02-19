@@ -295,8 +295,9 @@ func (m *FileMetadata) SyntheticSeqNum() sstable.SyntheticSeqNum {
 // IterTransforms returns an sstable.IterTransforms that has SyntheticSeqNum set as needed.
 func (m *FileMetadata) IterTransforms() sstable.IterTransforms {
 	return sstable.IterTransforms{
-		SyntheticSeqNum: m.SyntheticSeqNum(),
-		SyntheticSuffix: m.SyntheticSuffix,
+		SyntheticSeqNum:   m.SyntheticSeqNum(),
+		PrefixReplacement: m.PrefixReplacement,
+		SyntheticSuffix:   m.SyntheticSuffix,
 	}
 }
 
@@ -349,13 +350,12 @@ type VirtualFileMeta struct {
 // sstable reader.
 func (m VirtualFileMeta) VirtualReaderParams(isShared bool) sstable.VirtualReaderParams {
 	return sstable.VirtualReaderParams{
-		Lower:             m.Smallest,
-		Upper:             m.Largest,
-		FileNum:           m.FileNum,
-		IsSharedIngested:  isShared && m.SyntheticSeqNum() != 0,
-		Size:              m.Size,
-		BackingSize:       m.FileBacking.Size,
-		PrefixReplacement: m.PrefixReplacement,
+		Lower:            m.Smallest,
+		Upper:            m.Largest,
+		FileNum:          m.FileNum,
+		IsSharedIngested: isShared && m.SyntheticSeqNum() != 0,
+		Size:             m.Size,
+		BackingSize:      m.FileBacking.Size,
 	}
 }
 

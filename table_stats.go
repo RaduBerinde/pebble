@@ -420,7 +420,7 @@ func (d *DB) loadTableRangeDelStats(
 		// the size of the range key block relative to the overall size of the
 		// table is expected to be small.
 		if level == numLevels-1 && meta.SmallestSeqNum < maxRangeDeleteSeqNum {
-			size, err := r.EstimateDiskUsage(start, end)
+			size, err := r.EstimateDiskUsage(meta.IterTransforms(), start, end)
 			if err != nil {
 				return nil, err
 			}
@@ -616,13 +616,13 @@ func (d *DB) estimateReclaimedSizeBeneath(
 				if file.Virtual {
 					err = d.tableCache.withVirtualReader(
 						file.VirtualMeta(), func(r sstable.VirtualReader) (err error) {
-							size, err = r.EstimateDiskUsage(start, end)
+							size, err = r.EstimateDiskUsage(file.IterTransforms(), start, end)
 							return err
 						})
 				} else {
 					err = d.tableCache.withReader(
 						file.PhysicalMeta(), func(r *sstable.Reader) (err error) {
-							size, err = r.EstimateDiskUsage(start, end)
+							size, err = r.EstimateDiskUsage(file.IterTransforms(), start, end)
 							return err
 						})
 				}

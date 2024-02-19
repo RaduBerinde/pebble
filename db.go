@@ -2416,7 +2416,7 @@ func (d *DB) EstimateDiskUsageByBackingType(
 					err = d.tableCache.withVirtualReader(
 						file.VirtualMeta(),
 						func(r sstable.VirtualReader) (err error) {
-							size, err = r.EstimateDiskUsage(start, end)
+							size, err = r.EstimateDiskUsage(file.IterTransforms(), start, end)
 							return err
 						},
 					)
@@ -2424,7 +2424,7 @@ func (d *DB) EstimateDiskUsageByBackingType(
 					err = d.tableCache.withReader(
 						file.PhysicalMeta(),
 						func(r *sstable.Reader) (err error) {
-							size, err = r.EstimateDiskUsage(start, end)
+							size, err = r.EstimateDiskUsage(file.IterTransforms(), start, end)
 							return err
 						},
 					)

@@ -205,7 +205,7 @@ func (i *singleLevelIterator) init(
 	}
 	if v != nil {
 		i.vState = v
-		i.endKeyInclusive, lower, upper = v.constrainBounds(lower, upper, false /* endInclusive */)
+		i.endKeyInclusive, lower, upper = v.constrainBounds(lower, upper, false /* endInclusive */, transforms.PrefixReplacement)
 	}
 
 	i.inPool = false
@@ -355,7 +355,7 @@ func (i *singleLevelIterator) SetBounds(lower, upper []byte) {
 		// can be wider than the actual sstable's bounds because we won't
 		// accidentally expose additional keys as there are no additional keys.
 		i.endKeyInclusive, lower, upper = i.vState.constrainBounds(
-			lower, upper, false,
+			lower, upper, false /* endInclusive */, i.transforms.PrefixReplacement,
 		)
 	} else {
 		// TODO(bananabrick): Figure out the logic here to enable the boundsCmp

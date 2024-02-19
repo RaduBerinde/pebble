@@ -1023,7 +1023,7 @@ func (r *Reader) CommonProperties() *CommonProperties {
 // TODO(ajkr): account for metablock space usage. Perhaps look at the fraction of
 // data blocks overlapped and add that same fraction of the metadata blocks to the
 // estimate.
-func (r *Reader) EstimateDiskUsage(start, end []byte) (uint64, error) {
+func (r *Reader) EstimateDiskUsage(transforms IterTransforms, start, end []byte) (uint64, error) {
 	if r.err != nil {
 		return 0, r.err
 	}
@@ -1039,14 +1039,14 @@ func (r *Reader) EstimateDiskUsage(start, end []byte) (uint64, error) {
 	// to the same blockIter over the single index in the unpartitioned case.
 	var startIdxIter, endIdxIter *blockIter
 	if r.Properties.IndexPartitions == 0 {
-		iter, err := newBlockIter(r.Compare, r.Split, indexH.Get(), NoTransforms)
+		iter, err := newBlockIter(r.Compare, r.Split, indexH.Get(), transforms)
 		if err != nil {
 			return 0, err
 		}
 		startIdxIter = iter
 		endIdxIter = iter
 	} else {
-		topIter, err := newBlockIter(r.Compare, r.Split, indexH.Get(), NoTransforms)
+		topIter, err := newBlockIter(r.Compare, r.Split, indexH.Get(), transforms)
 		if err != nil {
 			return 0, err
 		}

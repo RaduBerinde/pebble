@@ -553,7 +553,7 @@ func (s *sstableT) runSpace(cmd *cobra.Command, args []string) {
 		}
 		defer r.Close()
 
-		bytes, err := r.EstimateDiskUsage(s.start, s.end)
+		bytes, err := r.EstimateDiskUsage(sstable.NoTransforms, s.start, s.end)
 		if err != nil {
 			fmt.Fprintf(stderr, "%s\n", err)
 			return

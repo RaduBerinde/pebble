@@ -5,7 +5,6 @@
 package sstable
 
 import (
-	"bytes"
 	"context"
 
 	"github.com/cockroachdb/pebble/internal/base"
@@ -35,7 +34,6 @@ type virtualState struct {
 	fileNum          base.FileNum
 	Compare          Compare
 	isSharedIngested bool
-	prefixChange     *PrefixReplacement
 }
 
 // VirtualReaderParams are the parameters necessary to create a VirtualReader.
@@ -49,8 +47,6 @@ type VirtualReaderParams struct {
 	// BackingSize is the total size of the backing table. The ratio between Size
 	// and BackingSize is used to estimate statistics.
 	BackingSize uint64
-	// TODO(radu): these should be moved to sstable.IterTransforms.
-	PrefixReplacement *PrefixReplacement
 }
 
 // MakeVirtualReader is used to contruct a reader which can read from virtual
@@ -62,7 +58,6 @@ func MakeVirtualReader(reader *Reader, p VirtualReaderParams) VirtualReader {
 		fileNum:          p.FileNum,
 		Compare:          reader.Compare,
 		isSharedIngested: p.IsSharedIngested,
-		prefixChange:     p.PrefixReplacement,
 	}
 	v := VirtualReader{
 		vState: vState,
@@ -104,10 +99,13 @@ func (v *VirtualReader) NewCompactionIter(
 ) (Iterator, error) {
 	i, err := v.reader.newCompactionIter(
 		transforms, bytesIterated, categoryAndQoS, statsCollector, rp, &v.vState, bufferPool)
-	if err == nil && v.vState.prefixChange != nil {
-		i = newPrefixReplacingIterator(i, v.vState.prefixChange.ContentPrefix, v.vState.prefixChange.SyntheticPrefix, v.reader.Compare)
+	if err != nil {
+		return nil, err
 	}
-	return i, err
+	if p := transforms.PrefixReplacement; p != nil {
+		i = newPrefixReplacingIterator(i, p.ContentPrefix, p.SyntheticPrefix, v.reader.Compare)
+	}
+	return i, nil
 }
 
 // NewIterWithBlockPropertyFiltersAndContextEtc wraps
@@ -128,10 +126,13 @@ func (v *VirtualReader) NewIterWithBlockPropertyFiltersAndContextEtc(
 	i, err := v.reader.newIterWithBlockPropertyFiltersAndContext(
 		ctx, transforms, lower, upper, filterer, useFilterBlock,
 		stats, categoryAndQoS, statsCollector, rp, &v.vState)
-	if err == nil && v.vState.prefixChange != nil {
-		i = newPrefixReplacingIterator(i, v.vState.prefixChange.ContentPrefix, v.vState.prefixChange.SyntheticPrefix, v.reader.Compare)
+	if err != nil {
+		return nil, err
 	}
-	return i, err
+	if p := transforms.PrefixReplacement; p != nil {
+		i = newPrefixReplacingIterator(i, p.ContentPrefix, p.SyntheticPrefix, v.reader.Compare)
+	}
+	return i, nil
 }
 
 // ValidateBlockChecksumsOnBacking will call ValidateBlockChecksumsOnBacking on the underlying reader.
@@ -154,15 +155,15 @@ func (v *VirtualReader) NewRawRangeDelIter(
 	lower := &v.vState.lower
 	upper := &v.vState.upper
 
-	if v.vState.prefixChange != nil {
-		lower = &InternalKey{UserKey: v.vState.prefixChange.ReplaceArg(lower.UserKey), Trailer: lower.Trailer}
-		upper = &InternalKey{UserKey: v.vState.prefixChange.ReplaceArg(upper.UserKey), Trailer: upper.Trailer}
+	if p := transforms.PrefixReplacement; p != nil {
+		lower = &InternalKey{UserKey: p.ReplaceArg(lower.UserKey), Trailer: lower.Trailer}
+		upper = &InternalKey{UserKey: p.ReplaceArg(upper.UserKey), Trailer: upper.Trailer}
 
 		iter = keyspan.Truncate(
 			v.reader.Compare, iter, lower.UserKey, upper.UserKey,
 			lower, upper, !v.vState.upper.IsExclusiveSentinel(), /* panicOnUpperTruncate */
 		)
-		return newPrefixReplacingFragmentIterator(iter, v.vState.prefixChange.ContentPrefix, v.vState.prefixChange.SyntheticPrefix), nil
+		return newPrefixReplacingFragmentIterator(iter, p.ContentPrefix, p.SyntheticPrefix), nil
 	}
 
 	// Truncation of spans isn't allowed at a user key that also contains points
@@ -220,14 +221,14 @@ func (v *VirtualReader) NewRawRangeKeyIter(
 		iter = transformIter
 	}
 
-	if v.vState.prefixChange != nil {
-		lower = &InternalKey{UserKey: v.vState.prefixChange.ReplaceArg(lower.UserKey), Trailer: lower.Trailer}
-		upper = &InternalKey{UserKey: v.vState.prefixChange.ReplaceArg(upper.UserKey), Trailer: upper.Trailer}
+	if p := transforms.PrefixReplacement; p != nil {
+		lower = &InternalKey{UserKey: p.ReplaceArg(lower.UserKey), Trailer: lower.Trailer}
+		upper = &InternalKey{UserKey: p.ReplaceArg(upper.UserKey), Trailer: upper.Trailer}
 		iter = keyspan.Truncate(
 			v.reader.Compare, iter, lower.UserKey, upper.UserKey,
 			lower, upper, !v.vState.upper.IsExclusiveSentinel(), /* panicOnUpperTruncate */
 		)
-		return newPrefixReplacingFragmentIterator(iter, v.vState.prefixChange.ContentPrefix, v.vState.prefixChange.SyntheticPrefix), nil
+		return newPrefixReplacingFragmentIterator(iter, p.ContentPrefix, p.SyntheticPrefix), nil
 	}
 
 	// Truncation of spans isn't allowed at a user key that also contains points
@@ -250,7 +251,7 @@ func (v *VirtualReader) NewRawRangeKeyIter(
 // the virtual sstable. The function will return if the new end key is
 // inclusive.
 func (v *virtualState) constrainBounds(
-	start, end []byte, endInclusive bool,
+	start, end []byte, endInclusive bool, prefixChange *PrefixReplacement,
 ) (lastKeyInclusive bool, first []byte, last []byte) {
 	first = start
 	if start == nil || v.Compare(start, v.lower.UserKey) < 0 {
@@ -275,9 +276,9 @@ func (v *virtualState) constrainBounds(
 			last = end
 		}
 	}
-	if v.prefixChange != nil {
-		first = v.prefixChange.ReplaceArg(first)
-		last = v.prefixChange.ReplaceArg(last)
+	if prefixChange != nil {
+		first = prefixChange.ReplaceArg(first)
+		last = prefixChange.ReplaceArg(last)
 	}
 	// TODO(bananabrick): What if someone passes in bounds completely outside of
 	// virtual sstable bounds?
@@ -286,19 +287,21 @@ func (v *virtualState) constrainBounds(
 
 // EstimateDiskUsage just calls VirtualReader.reader.EstimateDiskUsage after
 // enforcing the virtual sstable bounds.
-func (v *VirtualReader) EstimateDiskUsage(start, end []byte) (uint64, error) {
-	_, f, l := v.vState.constrainBounds(start, end, true /* endInclusive */)
-	if v.vState.prefixChange != nil {
-		if !bytes.HasPrefix(f, v.vState.prefixChange.SyntheticPrefix) || !bytes.HasPrefix(l, v.vState.prefixChange.SyntheticPrefix) {
-			return 0, errInputPrefixMismatch
-		}
-		// TODO(dt): we could add a scratch buf to VirtualReader to avoid allocs on
-		// repeated calls to this.
-		f = append(append([]byte{}, v.vState.prefixChange.ContentPrefix...), f[len(v.vState.prefixChange.SyntheticPrefix):]...)
-		l = append(append([]byte{}, v.vState.prefixChange.ContentPrefix...), l[len(v.vState.prefixChange.SyntheticPrefix):]...)
-	}
+func (v *VirtualReader) EstimateDiskUsage(
+	transforms IterTransforms, start, end []byte,
+) (uint64, error) {
+	_, f, l := v.vState.constrainBounds(start, end, true /* endInclusive */, transforms.PrefixReplacement)
+	//if v.vState.prefixChange != nil {
+	//	if !bytes.HasPrefix(f, v.vState.prefixChange.SyntheticPrefix) || !bytes.HasPrefix(l, v.vState.prefixChange.SyntheticPrefix) {
+	//		return 0, errInputPrefixMismatch
+	//	}
+	//	// TODO(dt): we could add a scratch buf to VirtualReader to avoid allocs on
+	//	// repeated calls to this.
+	//	f = append(append([]byte{}, v.vState.prefixChange.ContentPrefix...), f[len(v.vState.prefixChange.SyntheticPrefix):]...)
+	//	l = append(append([]byte{}, v.vState.prefixChange.ContentPrefix...), l[len(v.vState.prefixChange.SyntheticPrefix):]...)
+	//}
 
-	return v.reader.EstimateDiskUsage(f, l)
+	return v.reader.EstimateDiskUsage(NoTransforms, f, l)
 }
 
 // CommonProperties implements the CommonReader interface.

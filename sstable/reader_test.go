@@ -307,7 +307,7 @@ func TestVirtualReader(t *testing.T) {
 			params.FileNum = nextFileNum()
 			params.BackingSize = wMeta.Size
 			var err error
-			params.Size, err = r.EstimateDiskUsage(params.Lower.UserKey, params.Upper.UserKey)
+			params.Size, err = r.EstimateDiskUsage(transforms, params.Lower.UserKey, params.Upper.UserKey)
 			if err != nil {
 				return err.Error()
 			}
@@ -346,7 +346,7 @@ func TestVirtualReader(t *testing.T) {
 			}
 			splits := strings.Split(td.CmdArgs[0].String(), ",")
 			of, ol := []byte(splits[0]), []byte(splits[1])
-			inclusive, f, l := v.vState.constrainBounds(of, ol, splits[2] == "true")
+			inclusive, f, l := v.vState.constrainBounds(of, ol, splits[2] == "true", nil /* prefixReplacement */)
 			var buf bytes.Buffer
 			buf.Write(f)
 			buf.WriteByte(',')
@@ -612,7 +612,7 @@ func TestInjectedErrors(t *testing.T) {
 			}
 			defer func() { reterr = firstError(reterr, r.Close()) }()
 
-			_, err = r.EstimateDiskUsage([]byte("borrower"), []byte("lender"))
+			_, err = r.EstimateDiskUsage(NoTransforms, []byte("borrower"), []byte("lender"))
 			if err != nil {
 				return err
 			}
