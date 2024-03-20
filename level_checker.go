@@ -47,9 +47,9 @@ import (
 
 // The per-level structure used by simpleMergingIter.
 type simpleMergingIterLevel struct {
-	iter         internalIterator
-	rangeDelIter keyspan.FragmentIterator
-	levelIterBoundaryContext
+	iter                     internalIterator
+	rangeDelIter             keyspan.FragmentIterator
+	levelIterBoundaryContext levelIterBoundaryContext
 
 	iterKey   *InternalKey
 	iterValue base.LazyValue
@@ -223,7 +223,16 @@ func (m *simpleMergingIter) step() bool {
 	m.lastIterMsg = l.iter.String()
 
 	// Step to the next point.
-	if l.iterKey, l.iterValue = l.iter.Next(); l.iterKey != nil {
+	l.iterKey, l.iterValue = l.iter.Next()
+
+	// Skip synthetic boundary keys.
+	for l.iterKey != nil &&
+		(l.levelIterBoundaryContext.isSyntheticIterBoundsKey ||
+			l.levelIterBoundaryContext.isIgnorableBoundaryKey) {
+		l.iterKey, l.iterValue = l.iter.Next()
+	}
+
+	if l.iterKey != nil {
 		// Check point keys in an sstable are ordered. Although not required, we check
 		// for memtables as well. A subtle check here is that successive sstables of
 		// L1 and higher levels are ordered. This happens when levelIter moves to the

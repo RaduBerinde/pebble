@@ -1019,7 +1019,7 @@ func (l *levelIter) skipEmptyFileForward() (*InternalKey, base.LazyValue) {
 				return nil, base.LazyValue{}
 			}
 			// If the boundary is a range deletion tombstone, return that key.
-			if l.iterFile.LargestPointKey.Kind() == InternalKeyKindRangeDelete {
+			if *l.rangeDelIterPtr != nil {
 				l.largestBoundary = &l.iterFile.LargestPointKey
 				if l.boundaryContext != nil {
 					l.boundaryContext.isIgnorableBoundaryKey = true
@@ -1046,14 +1046,14 @@ func (l *levelIter) skipEmptyFileForward() (*InternalKey, base.LazyValue) {
 			// tolerate this repeat key and in this case will keep the level at
 			// the top of the heap and immediately skip the entry, advancing to
 			// the next file.
-			if *l.rangeDelIterPtr != nil && l.filteredIter != nil &&
-				l.filteredIter.MaybeFilteredKeys() {
-				l.largestBoundary = &l.iterFile.Largest
-				if l.boundaryContext != nil {
-					l.boundaryContext.isIgnorableBoundaryKey = true
-				}
-				return l.largestBoundary, base.LazyValue{}
-			}
+			//if *l.rangeDelIterPtr != nil && l.filteredIter != nil &&
+			//	l.filteredIter.MaybeFilteredKeys() {
+			//	l.largestBoundary = &l.iterFile.Largest
+			//	if l.boundaryContext != nil {
+			//		l.boundaryContext.isIgnorableBoundaryKey = true
+			//	}
+			//	return l.largestBoundary, base.LazyValue{}
+			//}
 		}
 
 		// Current file was exhausted. Move to the next file.
