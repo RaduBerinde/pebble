@@ -26,7 +26,6 @@ import (
 	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/internal/private"
 	"github.com/cockroachdb/pebble/internal/rangedel"
-	"github.com/cockroachdb/pebble/internal/rangekey"
 	"github.com/cockroachdb/pebble/objstorage"
 	"github.com/cockroachdb/pebble/objstorage/objstorageprovider/objiotracing"
 	"github.com/cockroachdb/pebble/objstorage/remote"
@@ -2592,13 +2591,13 @@ func (d *DB) runCompaction(
 		Equal:                                  c.equal,
 		Merge:                                  d.merge,
 		TombstoneElision:                       c.delElision,
-		RangeKeyElision:                        c.rangeKeyElision,
 		Snapshots:                              snapshots,
 		AllowZeroSeqNum:                        c.allowedZeroSeqNum,
 		IneffectualSingleDeleteCallback:        d.opts.Experimental.IneffectualSingleDeleteCallback,
 		SingleDeleteInvariantViolationCallback: d.opts.Experimental.SingleDeleteInvariantViolationCallback,
 	}
 	iter := compact.NewIter(cfg, iiter)
+	rangeKeyCompactor := compact.MakeRangeKeySpanCompactor(c.cmp, c.equal, snapshots, c.rangeKeyElision)
 
 	var (
 		createdFiles    []base.DiskFileNum
@@ -2791,7 +2790,7 @@ func (d *DB) runCompaction(
 		if tw == nil {
 			startKey := iter.FirstTombstoneStart()
 			if startKey == nil {
-				startKey = iter.FirstRangeKeyStart()
+				startKey = rangeKeyCompactor.StartKey()
 			}
 			if splitKey != nil && d.cmp(startKey, splitKey) == 0 {
 				return nil
@@ -2832,14 +2831,13 @@ func (d *DB) runCompaction(
 				return err
 			}
 		}
-		for _, v := range iter.RangeKeysUpTo(splitKey) {
-			// Same logic as for range tombstones, except added using tw.AddRangeKey.
+		if !rangeKeyCompactor.Empty() {
 			if tw == nil {
 				if err := newOutput(); err != nil {
 					return err
 				}
 			}
-			if err := rangekey.Encode(&v, tw.AddRangeKey); err != nil {
+			if err := rangeKeyCompactor.EncodeUpTo(splitKey, tw); err != nil {
 				return err
 			}
 		}
@@ -3020,7 +3018,7 @@ func (d *DB) runCompaction(
 	// to a grandparent file largest key, or nil. Taken together, these
 	// progress guarantees ensure that eventually the input iterator will be
 	// exhausted and the range tombstone fragments will all be flushed.
-	for key, val := iter.First(); key != nil || iter.FirstTombstoneStart() != nil || iter.FirstRangeKeyStart() != nil; {
+	for key, val := iter.First(); key != nil || iter.FirstTombstoneStart() != nil || !rangeKeyCompactor.Empty(); {
 		var firstKey []byte
 		if key != nil {
 			firstKey = key.UserKey
@@ -3066,7 +3064,18 @@ func (d *DB) runCompaction(
 				// Since the keys' Suffix and Value fields are not deep cloned, the
 				// underlying blockIter must be kept open for the lifetime of the
 				// compaction.
-				iter.AddRangeKeySpan(c.rangeKeyInterleaving.Span())
+				if !rangeKeyCompactor.Empty() {
+					// TODO(radu): stop creating the output lazily.
+					if tw == nil {
+						if err := newOutput(); err != nil {
+							return nil, pendingOutputs, stats, err
+						}
+					}
+					if err := rangeKeyCompactor.Encode(tw); err != nil {
+						return nil, pendingOutputs, stats, err
+					}
+				}
+				rangeKeyCompactor.Compact(c.rangeKeyInterleaving.Span())
 				continue
 			}
 			if tw == nil {
