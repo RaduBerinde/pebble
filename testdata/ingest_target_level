@@ -115,7 +115,7 @@ L6
   a.SET.2:2
 L6
   c.SET.1:1
-  compact:a-c
+  compact:a#4,SET-c#4,SET
 ----
 L5:
   000004:[a#4,SET-a#4,SET]
@@ -291,7 +291,7 @@ L6
 L6
   f.SET.4:4
   k.SET.6:6
-  compact:f-k
+  compact:f#4,SET-k#6,SET
 ----
 L6:
   000004:[a#2,SET-d#3,SET]
@@ -339,5 +339,22 @@ L0.0:
 
 target
 000000:[i#5,RANGEDEL-j#inf,RANGEDEL] seqnums:[5-5]
+----
+6
+
+# Verify that we correctly handle exclusive keys when checking for overlap with
+# compactions.
+define
+L6
+  compact:u#22,SET-v#inf,RANGEDEL
+----
+
+target
+000000:[t#5,RANGEDEL-u#inf,RANGEDEL] seqnums:[5-5]
+----
+6
+
+target
+000000:[v#5,SET-w#5,SET] seqnums:[5-5]
 ----
 6

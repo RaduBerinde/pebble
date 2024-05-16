@@ -961,31 +961,16 @@ func runDBDefineCmdReuseFS(td *datadriven.TestData, opts *Options) (*DB, error) 
 		return nil
 	}
 
-	// Example, a-c.
-	parseMeta := func(s string) (*fileMetadata, error) {
-		parts := strings.Split(s, "-")
-		if len(parts) != 2 {
-			return nil, errors.Errorf("malformed table spec: %s", s)
-		}
-		m := (&fileMetadata{}).ExtendPointKeyBounds(
-			opts.Comparer.Compare,
-			InternalKey{UserKey: []byte(parts[0])},
-			InternalKey{UserKey: []byte(parts[1])},
-		)
-		m.InitPhysicalBacking()
-		return m, nil
-	}
-
-	// Example, compact: a-c.
+	// Example: compact:a#4,SET-c#4,SET
 	parseCompaction := func(outputLevel int, s string) (*compaction, error) {
-		m, err := parseMeta(s[len("compact:"):])
-		if err != nil {
-			return nil, err
+		f := strings.Split(s, "-")
+		if len(f) != 2 {
+			return nil, errors.Errorf("malformed compact keys %q", s)
 		}
 		c := &compaction{
 			inputs:   []compactionLevel{{}, {level: outputLevel}},
-			smallest: m.Smallest,
-			largest:  m.Largest,
+			smallest: base.ParsePrettyInternalKey(f[0]),
+			largest:  base.ParsePrettyInternalKey(f[1]),
 		}
 		c.startLevel, c.outputLevel = &c.inputs[0], &c.inputs[1]
 		return c, nil
@@ -1048,7 +1033,7 @@ func runDBDefineCmdReuseFS(td *datadriven.TestData, opts *Options) (*DB, error) 
 			i := strings.Index(data, ":")
 			// Define in-progress compactions.
 			if data[:i] == "compact" {
-				c, err := parseCompaction(level, data)
+				c, err := parseCompaction(level, data[i+1:])
 				if err != nil {
 					return nil, err
 				}

@@ -909,6 +909,7 @@ func ingestTargetLevel(
 	}
 	targetLevel = 0
 	splitFile = nil
+	metaBounds := meta.UserKeyBounds()
 	for level := baseLevel; level < numLevels; level++ {
 		var candidateSplitFile *fileMetadata
 		switch lsmOverlap[level].result {
@@ -951,8 +952,8 @@ func ingestTargetLevel(
 			if c.outputLevel == nil || level != c.outputLevel.level {
 				continue
 			}
-			if cmp(meta.Smallest.UserKey, c.largest.UserKey) <= 0 &&
-				cmp(meta.Largest.UserKey, c.smallest.UserKey) >= 0 {
+			compactionBounds := base.UserKeyBoundsFromInternal(c.smallest, c.largest)
+			if compactionBounds.Overlaps(cmp, &metaBounds) {
 				overlaps = true
 				break
 			}
