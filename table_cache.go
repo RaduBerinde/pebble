@@ -562,7 +562,9 @@ func (c *tableCacheShard) newPointIter(
 	var iter sstable.Iterator
 	useFilter := true
 	if opts != nil {
-		useFilter = manifest.LevelToInt(opts.level) != 6 || opts.UseL6Filters
+		// By default, we don't use block filters for L6 and for flushable ingests,
+		// as these blocks can be very big.
+		useFilter = opts.UseL6Filters || (!opts.level.FlushableIngestLevel() && manifest.LevelToInt(opts.level) != 6)
 		ctx = objiotracing.WithLevel(ctx, manifest.LevelToInt(opts.level))
 	}
 	tableFormat, err := v.reader.TableFormat()
