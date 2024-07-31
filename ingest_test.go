@@ -903,17 +903,6 @@ func testIngestSharedImpl(
 ) {
 	var d, d1, d2 *DB
 	var efos map[string]*EventuallyFileOnlySnapshot
-	defer func() {
-		for _, e := range efos {
-			require.NoError(t, e.Close())
-		}
-		if d1 != nil {
-			require.NoError(t, d1.Close())
-		}
-		if d2 != nil {
-			require.NoError(t, d2.Close())
-		}
-	}()
 	creatorIDCounter := uint64(1)
 	replicateCounter := 1
 	var opts1, opts2 *Options
@@ -1245,6 +1234,16 @@ func testIngestSharedImpl(
 			return fmt.Sprintf("unknown command: %s", td.Cmd)
 		}
 	})
+
+	for _, e := range efos {
+		require.NoError(t, e.Close())
+	}
+	if d1 != nil {
+		require.NoError(t, d1.Close())
+	}
+	if d2 != nil {
+		require.NoError(t, d2.Close())
+	}
 }
 
 func TestIngestShared(t *testing.T) {

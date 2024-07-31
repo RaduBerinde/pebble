@@ -2677,10 +2677,19 @@ func (i *Iterator) SetOptions(o *IterOptions) {
 		initialized: i.rangeKey != nil || !i.opts.rangeKeys(),
 	}
 
-	boundsEqual := ((i.opts.LowerBound == nil) == (o.LowerBound == nil)) &&
-		((i.opts.UpperBound == nil) == (o.UpperBound == nil)) &&
-		i.equal(i.opts.LowerBound, o.LowerBound) &&
-		i.equal(i.opts.UpperBound, o.UpperBound)
+	boundIsEqual := func(a, b []byte) bool {
+		switch {
+		case a == nil && b == nil:
+			return true
+		case a == nil || b == nil:
+			return false
+		default:
+			return i.equal(a, b)
+		}
+	}
+
+	boundsEqual := boundIsEqual(i.opts.LowerBound, o.LowerBound) &&
+		boundIsEqual(i.opts.UpperBound, o.UpperBound)
 
 	if boundsEqual && o.KeyTypes == i.opts.KeyTypes &&
 		(i.pointIter != nil || !i.opts.pointKeys()) &&

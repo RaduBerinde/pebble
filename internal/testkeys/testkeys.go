@@ -109,10 +109,11 @@ var Comparer = &base.Comparer{
 //   - when both keys have a suffix, the key with the larger (decoded) suffix
 //     value is smaller.
 func compare(a, b []byte) int {
-	ai, bi := split(a), split(b)
+	ai := split(a)
 	if ai == 0 && len(a) > 0 {
 		panic(fmt.Sprintf("Compare called with bare suffix %s", a))
 	}
+	bi := split(b)
 	if bi == 0 && len(b) > 0 {
 		panic(fmt.Sprintf("Compare called with bare suffix %s", b))
 	}
@@ -123,6 +124,9 @@ func compare(a, b []byte) int {
 }
 
 func split(a []byte) int {
+	if len(a) == 0 {
+		panic("empty key")
+	}
 	i := bytes.LastIndexByte(a, suffixDelim)
 	if i == 0 {
 		panic("split called on bare prefix")

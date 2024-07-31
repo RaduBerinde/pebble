@@ -1264,13 +1264,17 @@ func (w *RawWriter) maybeAddBlockPropertiesToBlockHandle(
 func (w *RawWriter) indexEntrySep(
 	prevKey, key InternalKey, dataBlockBuf *dataBlockBuf,
 ) InternalKey {
+	if !prevKey.Valid() {
+		// We are outputting an empty data block.
+		return InternalKey{}
+	}
 	// Make a rough guess that we want key-sized scratch to compute the separator.
 	if cap(dataBlockBuf.sepScratch) < key.Size() {
 		dataBlockBuf.sepScratch = make([]byte, 0, key.Size()*2)
 	}
 
 	var sep InternalKey
-	if key.UserKey == nil && key.Trailer == 0 {
+	if key.IsUnset() {
 		sep = prevKey.Successor(w.compare, w.successor, dataBlockBuf.sepScratch[:0])
 	} else {
 		sep = prevKey.Separator(w.compare, w.separator, dataBlockBuf.sepScratch[:0], key)

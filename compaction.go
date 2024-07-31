@@ -1486,7 +1486,8 @@ func (d *DB) flush1() (bytesFlushed uint64, err error) {
 				// doing a [c,d) excise at the same time as this compaction, we will have
 				// to error out the whole compaction as we can't guarantee it hasn't/won't
 				// write a file overlapping with the excise span.
-				if ingestFlushable.exciseSpan.OverlapsInternalKeyRange(d.cmp, c2.smallest, c2.largest) {
+				// TODO(radu): investigate the case where c2's bounds are unset.
+				if !c2.smallest.IsUnset() && ingestFlushable.exciseSpan.OverlapsInternalKeyRange(d.cmp, c2.smallest, c2.largest) {
 					c2.cancel.Store(true)
 					continue
 				}

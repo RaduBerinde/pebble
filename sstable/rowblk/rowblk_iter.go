@@ -614,7 +614,7 @@ func (i *Iter) SeekGE(key []byte, flags base.SeekGEFlags) *base.InternalKV {
 			}
 			// Else k is invalid, and left as nil
 
-			if i.cmp(searchKey, k) > 0 {
+			if len(k) == 0 || i.cmp(searchKey, k) > 0 {
 				// The search key is greater than the user key at this restart point.
 				// Search beyond this restart point, since we are trying to find the
 				// first restart point with a user key >= the search key.
@@ -678,7 +678,9 @@ func (i *Iter) SeekGE(key []byte, flags base.SeekGEFlags) *base.InternalKV {
 
 	i.maybeReplaceSuffix()
 
-	if !hiddenPoint && i.cmp(i.ikv.K.UserKey, key) >= 0 {
+	// TODO(radu): investigate why an empty UserKey can happen here. Possibly related
+	// to empty data blocks?
+	if !hiddenPoint && len(i.ikv.K.UserKey) > 0 && i.cmp(i.ikv.K.UserKey, key) >= 0 {
 		// Initialize i.lazyValue
 		if !i.lazyValueHandling.hasValuePrefix ||
 			i.ikv.K.Kind() != base.InternalKeyKindSet {
@@ -795,7 +797,7 @@ func (i *Iter) SeekLT(key []byte, flags base.SeekLTFlags) *base.InternalKV {
 			}
 			// Else k is invalid, and left as nil
 
-			if i.cmp(searchKey, k) > 0 {
+			if len(k) == 0 || i.cmp(searchKey, k) > 0 {
 				// The search key is greater than the user key at this restart point.
 				// Search beyond this restart point, since we are trying to find the
 				// first restart point with a user key >= the search key.
@@ -936,7 +938,8 @@ func (i *Iter) SeekLT(key []byte, flags base.SeekLTFlags) *base.InternalKV {
 		// NB: we don't use the hiddenPoint return value of decodeInternalKey
 		// since we want to stop as soon as we reach a key >= ikey.UserKey, so
 		// that we can reverse.
-		if i.cmp(i.ikv.K.UserKey, key) >= 0 {
+		// TODO(radu): investigate why an empty UserKey can happen here.
+		if len(i.ikv.K.UserKey) > 0 && i.cmp(i.ikv.K.UserKey, key) >= 0 {
 			// The current key is greater than or equal to our search key. Back up to
 			// the previous key which was less than our search key. Note that this for
 			// loop will execute at least once with this if-block not being true, so

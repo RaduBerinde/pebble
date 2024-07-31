@@ -992,7 +992,7 @@ func (i *InterleavingIter) yieldSyntheticSpanStartMarker(lowerBound []byte) *bas
 		// bound for truncating a span. The span a-z will be truncated to [k,
 		// z). If i.upper == k, we'd mistakenly try to return a span [k, k), an
 		// invariant violation.
-		if i.comparer.Equal(lowerBound, i.opts.UpperBound) {
+		if i.opts.UpperBound != nil && i.comparer.Equal(lowerBound, i.opts.UpperBound) {
 			return i.yieldNil()
 		}
 

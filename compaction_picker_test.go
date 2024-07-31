@@ -1477,13 +1477,6 @@ func TestCompactionPickerScores(t *testing.T) {
 
 	d, err := Open("", opts)
 	require.NoError(t, err)
-	defer func() {
-		if d != nil {
-			cleaner.resume()
-			require.NoError(t, closeAllSnapshots(d))
-			require.NoError(t, d.Close())
-		}
-	}()
 
 	var buf bytes.Buffer
 	datadriven.RunTest(t, "testdata/compaction_picker_scores", func(t *testing.T, td *datadriven.TestData) string {
@@ -1604,6 +1597,12 @@ func TestCompactionPickerScores(t *testing.T) {
 			return fmt.Sprintf("unknown command: %s", td.Cmd)
 		}
 	})
+
+	if d != nil {
+		cleaner.resume()
+		require.NoError(t, closeAllSnapshots(d))
+		require.NoError(t, d.Close())
+	}
 }
 
 func fileNums(files manifest.LevelSlice) string {

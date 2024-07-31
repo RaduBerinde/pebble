@@ -380,20 +380,22 @@ func (pc *pickedCompaction) clone() *pickedCompaction {
 // compactions: during the second call to setupInputs, the picked compaction's
 // smallest and largest keys should not decrease the key span.
 func (pc *pickedCompaction) maybeExpandBounds(smallest InternalKey, largest InternalKey) {
-	emptyKey := InternalKey{}
-	if base.InternalCompare(pc.cmp, smallest, emptyKey) == 0 {
-		if base.InternalCompare(pc.cmp, largest, emptyKey) != 0 {
+	if smallest.IsUnset() {
+		if !largest.IsUnset() {
 			panic("either both candidate keys are empty or neither are empty")
 		}
 		return
 	}
-	if base.InternalCompare(pc.cmp, pc.smallest, emptyKey) == 0 {
-		if base.InternalCompare(pc.cmp, pc.largest, emptyKey) != 0 {
-			panic("either both pc keys are empty or neither are empty")
-		}
+	if pc.smallest.IsUnset() {
 		pc.smallest = smallest
 		pc.largest = largest
 		return
+	}
+	if len(pc.smallest.UserKey) == 0 {
+		panic(pc.smallest.String())
+	}
+	if len(smallest.UserKey) == 0 {
+		panic(smallest.String())
 	}
 	if base.InternalCompare(pc.cmp, pc.smallest, smallest) >= 0 {
 		pc.smallest = smallest

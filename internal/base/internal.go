@@ -373,6 +373,11 @@ func InternalCompare(userCmp Compare, a, b InternalKey) int {
 	return cmp.Compare(b.Trailer, a.Trailer)
 }
 
+// IsUnset returns true if k has the zero value.
+func (k InternalKey) IsUnset() bool {
+	return k.UserKey == nil && k.Trailer == 0
+}
+
 // Encode encodes the receiver into the buffer. The buffer must be large enough
 // to hold the encoded data. See InternalKey.Size().
 func (k InternalKey) Encode(buf []byte) {

@@ -205,7 +205,7 @@ func (m *simpleMergingIter) handleVisiblePoint(
 	item *simpleMergingIterItem, l *simpleMergingIterLevel,
 ) (ok bool) {
 	m.numPoints++
-	keyChanged := m.heap.cmp(item.key.UserKey, m.lastKey.UserKey) != 0
+	keyChanged := m.lastKey.UserKey == nil || m.heap.cmp(item.key.UserKey, m.lastKey.UserKey) != 0
 	if !keyChanged {
 		// At the same user key. We will see them in decreasing seqnum
 		// order so the lastLevel must not be lower.
