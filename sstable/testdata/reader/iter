@@ -32,6 +32,13 @@ next
 .
 
 iter
+seek-prefix-ge a
+next
+----
+<a:1>:A
+.
+
+iter
 seek-ge b
 next
 next
@@ -462,15 +469,11 @@ prev
 next
 next
 seek-prefix-ge x
-prev
-prev
 ----
 <a:1>:A
 .
 <a:1>:A
 <aae:1>:E
-.
-.
 .
 
 iter
@@ -718,3 +721,36 @@ next-prefix
 .
 <b@20:20>:b20
 .
+
+iter
+seek-prefix-ge a@18
+next
+next
+next
+next
+next
+next
+next
+next
+next
+----
+<a@18:18>:a18
+<a@17:17>:a17
+<a@16:16>:a16
+<a@15:15>:a15
+<a@14:14>:a14
+<a@13:13>:a13
+<a@12:12>:a12
+<a@11:11>:a11
+<a@10:10>:a10
+.
+
+iter
+seek-prefix-ge a@1
+----
+.
+
+iter
+seek-prefix-ge b
+----
+<b@20:20>:b20

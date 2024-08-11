@@ -988,7 +988,7 @@ func TestBlockProperties(t *testing.T) {
 			if err != nil {
 				return err.Error()
 			}
-			return runIterCmd(td, iter, false)
+			return runIterCmd(td, r.Comparer, iter)
 
 		default:
 			return fmt.Sprintf("unknown command: %s", td.Cmd)
@@ -1072,7 +1072,7 @@ func TestBlockProperties_BoundLimited(t *testing.T) {
 			if err != nil {
 				return err.Error()
 			}
-			return runIterCmd(td, iter, false, runIterCmdEveryOp(func(w io.Writer) {
+			return runIterCmd(td, r.Comparer, iter, runIterCmdEveryOp(func(w io.Writer) {
 				// Copy the bound-limited-wrapper's accumulated output to the
 				// iterator's writer. This interleaves its output with the
 				// iterator output.

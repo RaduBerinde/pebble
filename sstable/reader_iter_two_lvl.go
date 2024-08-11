@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/internal/treeprinter"
@@ -28,6 +29,12 @@ type twoLevelIterator[D any, PD block.DataBlockIterator[D]] struct {
 	// parameterized by the type of the data block iterator, pools must be
 	// specific to the type of the data block iterator.
 	pool *sync.Pool
+
+	// If prefix is set, the iterator is in prefix iteration mode (i.e. the last
+	// absolute positioning operation was SeekPrefixGE). This is the slice passed
+	// to SeekPrefixGE which the caller guarantees is stable until the next
+	// absolute positioning operation.
+	prefix []byte
 
 	// useFilterBlock controls whether we consult the bloom filter in the
 	// twoLevelIterator code. Note that secondLevel.useFilterBlock is always
@@ -228,6 +235,7 @@ func (i *twoLevelIterator[D, PD]) DebugTree(tp treeprinter.Node) {
 // package. Note that SeekGE only checks the upper bound. It is up to the
 // caller to ensure that key is greater than or equal to the lower bound.
 func (i *twoLevelIterator[D, PD]) SeekGE(key []byte, flags base.SeekGEFlags) *base.InternalKV {
+	i.prefix = nil
 	if i.secondLevel.vState != nil {
 		// Callers of SeekGE don't know about virtual sstable bounds, so we may
 		// have to internally restrict the bounds.
@@ -368,6 +376,7 @@ func (i *twoLevelIterator[D, PD]) SeekGE(key []byte, flags base.SeekGEFlags) *ba
 func (i *twoLevelIterator[D, PD]) SeekPrefixGE(
 	prefix, key []byte, flags base.SeekGEFlags,
 ) *base.InternalKV {
+	i.prefix = prefix
 	if i.secondLevel.vState != nil {
 		// Callers of SeekGE don't know about virtual sstable bounds, so we may
 		// have to internally restrict the bounds.
@@ -528,11 +537,23 @@ func (i *twoLevelIterator[D, PD]) SeekPrefixGE(
 
 	if !dontSeekWithinSingleLevelIter {
 		if ikv := i.secondLevel.seekPrefixGE(prefix, key, flags); ikv != nil {
+			if !i.secondLevel.reader.Split.HasPrefix(prefix, ikv.K.UserKey) {
+				// Next key has a different prefix.
+				return nil
+			}
 			return ikv
 		}
 	}
 	// NB: skipForward checks whether exhaustedBounds is already +1.
-	return i.skipForward()
+	//
+	// TODO(radu): skip loading the next index block if this index block ends
+	// after prefix.
+	if kv := i.skipForward(); kv != nil {
+		if i.secondLevel.reader.Split.HasPrefix(prefix, kv.K.UserKey) {
+			return kv
+		}
+	}
+	return nil
 }
 
 // virtualLast should only be called if i.vReader != nil.
@@ -596,6 +617,7 @@ func (i *twoLevelIterator[D, PD]) virtualLastSeekLE() *base.InternalKV {
 // package. Note that SeekLT only checks the lower bound. It is up to the
 // caller to ensure that key is less than the upper bound.
 func (i *twoLevelIterator[D, PD]) SeekLT(key []byte, flags base.SeekLTFlags) *base.InternalKV {
+	i.prefix = nil
 	if i.secondLevel.vState != nil {
 		// Might have to fix upper bound since virtual sstable bounds are not
 		// known to callers of SeekLT.
@@ -678,6 +700,7 @@ func (i *twoLevelIterator[D, PD]) SeekLT(key []byte, flags base.SeekLTFlags) *ba
 // to ensure that key is greater than or equal to the lower bound (e.g. via a
 // call to SeekGE(lower)).
 func (i *twoLevelIterator[D, PD]) First() *base.InternalKV {
+	i.prefix = nil
 	// If we have a lower bound, use SeekGE. Note that in general this is not
 	// supported usage, except when the lower bound is there because the table is
 	// virtual.
@@ -726,6 +749,7 @@ func (i *twoLevelIterator[D, PD]) First() *base.InternalKV {
 // to ensure that key is less than the upper bound (e.g. via a call to
 // SeekLT(upper))
 func (i *twoLevelIterator[D, PD]) Last() *base.InternalKV {
+	i.prefix = nil
 	if i.secondLevel.vState != nil {
 		if i.secondLevel.endKeyInclusive {
 			return i.virtualLast()
@@ -782,10 +806,34 @@ func (i *twoLevelIterator[D, PD]) Next() *base.InternalKV {
 		// encountered, the iterator must be re-seeked.
 		return nil
 	}
-	if ikv := i.secondLevel.Next(); ikv != nil {
-		return ikv
+	kv := i.secondLevel.Next()
+	if kv != nil {
+		if i.prefix == nil {
+			return kv
+		}
+		if i.secondLevel.prefix != nil {
+			// Fast path: this is the same second level index block in which we did
+			// the initial SeekPrefixGE. The second level iterator should have already
+			// checked the prefix.
+			if invariants.Enabled {
+				if len(i.secondLevel.prefix) != len(i.prefix) || &i.secondLevel.prefix[0] != &i.prefix[0] {
+					panic("inconsistent prefix")
+				}
+				if !i.secondLevel.reader.Split.HasPrefix(i.prefix, kv.K.UserKey) {
+					panic("second level did not check prefix")
+				}
+			}
+			return kv
+		}
+	} else if kv = i.skipForward(); kv == nil {
+		return nil
 	}
-	return i.skipForward()
+
+	if i.prefix != nil && !i.secondLevel.reader.Split.HasPrefix(i.prefix, kv.K.UserKey) {
+		return nil
+	}
+
+	return kv
 }
 
 // NextPrefix implements (base.InternalIterator).NextPrefix.
@@ -842,6 +890,10 @@ func (i *twoLevelIterator[D, PD]) NextPrefix(succKey []byte) *base.InternalKV {
 // Prev implements internalIterator.Prev, as documented in the pebble
 // package.
 func (i *twoLevelIterator[D, PD]) Prev() *base.InternalKV {
+	if i.prefix != nil {
+		i.secondLevel.err = errors.AssertionFailedf("Prev not supported in prefix iteration mode")
+		return nil
+	}
 	// Seek optimization only applies until iterator is first positioned after SetBounds.
 	i.secondLevel.boundsCmp = 0
 	if i.secondLevel.err != nil {

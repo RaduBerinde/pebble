@@ -8,10 +8,8 @@ d.SET.4:D
 iter
 seek-prefix-ge a
 next
-next
 ----
 <a:1>:A
-<aa:2>:AA
 .
 
 iter
@@ -26,14 +24,14 @@ seek-prefix-ge aa
 prev
 ----
 <aa:2>:AA
-.
+<err=Prev not supported in prefix iteration mode>
 
 iter
 seek-prefix-ge c
 prev
 ----
 <c:3>:C
-.
+<err=Prev not supported in prefix iteration mode>
 
 iter
 seek-prefix-ge b
@@ -73,12 +71,10 @@ seek-prefix-ge c
 next
 seek-prefix-ge a
 next
-next
 ----
 <c:3>:C
 .
 <a:1>:A
-<aa:2>:AA
 .
 
 iter
@@ -86,14 +82,12 @@ seek-prefix-ge aa
 next
 seek-prefix-ge a
 next
-next
 seek-prefix-ge c
 next
 ----
 <aa:2>:AA
 .
 <a:1>:A
-<aa:2>:AA
 .
 <c:3>:C
 .
@@ -105,42 +99,36 @@ seek-prefix-ge aa
 next
 seek-prefix-ge a
 next
-next
 ----
 <c:3>:C
 .
 <aa:2>:AA
 .
 <a:1>:A
-<aa:2>:AA
 .
 
 iter
 seek-prefix-ge a
 next
-next
 ----
 <a:1>:A
-<aa:2>:AA
 .
 
 iter
 seek-prefix-ge a
 next
 prev
-prev
 ----
 <a:1>:A
-<aa:2>:AA
-<a:1>:A
 .
+<err=Prev not supported in prefix iteration mode>
 
 iter
 seek-prefix-ge a
 prev
 ----
 <a:1>:A
-.
+<err=Prev not supported in prefix iteration mode>
 
 iter
 seek-prefix-ge a
@@ -212,30 +200,24 @@ prev
 ----
 <aa:2>:AA
 <aa:2>:AA
-.
+<err=Prev not supported in prefix iteration mode>
 
 iter
 seek-lt c
 seek-prefix-ge a
 next
-next
-
 ----
 <aa:2>:AA
 <a:1>:A
-<aa:2>:AA
 .
 
 iter
 seek-ge aa
 seek-prefix-ge a
 next
-next
-
 ----
 <aa:2>:AA
 <a:1>:A
-<aa:2>:AA
 .
 
 iter

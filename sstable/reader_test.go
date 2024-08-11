@@ -416,6 +416,7 @@ func runVirtualReaderTest(t *testing.T, path string, blockSize, indexBlockSize i
 			var stats base.InternalIteratorStats
 			runIterCmdOpts := []runIterCmdOption{
 				runIterCmdStats(&stats),
+				runIterCmdPrintValue(),
 			}
 			var filterer *BlockPropertiesFilterer
 			if td.HasArg("with-masking-filter") {
@@ -441,7 +442,7 @@ func runVirtualReaderTest(t *testing.T, path string, blockSize, indexBlockSize i
 			if err != nil {
 				return err.Error()
 			}
-			return runIterCmd(td, iter, true, runIterCmdOpts...)
+			return runIterCmd(td, testkeys.Comparer, iter, runIterCmdOpts...)
 
 		default:
 			return fmt.Sprintf("unknown command: %s", td.Cmd)
@@ -836,7 +837,11 @@ func runTestReader(t *testing.T, o WriterOptions, dir string, r *Reader, printVa
 				if err != nil {
 					return err.Error()
 				}
-				return runIterCmd(d, iter, printValue, runIterCmdStats(&stats))
+				opts := []runIterCmdOption{runIterCmdStats(&stats)}
+				if printValue {
+					opts = append(opts, runIterCmdPrintValue())
+				}
+				return runIterCmd(d, r.Comparer, iter, opts...)
 
 			case "get":
 				var b bytes.Buffer
@@ -954,9 +959,6 @@ func TestReaderCheckComparerMerger(t *testing.T) {
 			}
 		})
 	}
-}
-func checkValidPrefix(prefix, key []byte) bool {
-	return prefix == nil || bytes.HasPrefix(key, prefix)
 }
 
 func TestCompactionIteratorSetupForCompaction(t *testing.T) {
@@ -1164,7 +1166,10 @@ func (rw *readerWorkload) handleInvalid(callType readCallType, iter Iterator) *b
 	switch callType {
 	case SeekGE, Next, Last:
 		if len(rw.seekKeyAfterInvalid) == 0 {
-			return iter.Prev()
+			kv := iter.Prev()
+			if kv != nil || iter.Error() == nil && !strings.Contains(iter.Error().Error(), "Prev not supported") {
+				return kv
+			}
 		}
 		return iter.SeekLT(rw.seekKeyAfterInvalid, base.SeekLTFlagsNone)
 	case SeekPrefixGE:
@@ -1239,6 +1244,7 @@ func createReadWorkload(
 ) readerWorkload {
 	calls := make([]readCall, 0, callCount)
 
+	inPrefixMode := false
 	for i := 0; i < callCount; i++ {
 		var seekKey []byte
 
@@ -1259,7 +1265,12 @@ func createReadWorkload(
 			seekKey = append(seekKey, key...)
 		}
 		if callType == Next || callType == Prev {
+			if inPrefixMode && callType == Prev {
+				callType = Next
+			}
 			repeatCount = rng.Intn(100)
+		} else {
+			inPrefixMode = callType == SeekPrefixGE
 		}
 		calls = append(calls, readCall{callType: callType, seekKey: seekKey, repeatCount: repeatCount})
 	}

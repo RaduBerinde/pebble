@@ -82,12 +82,8 @@ seek-prefix-ge d
 
 iter
 seek-prefix-ge dd
-next
-next
 ----
 <dd:5>:dd
-<ddd:6>:ddd
-.
 
 # Build a simpler sstable for the rest of the tests.
 build
@@ -302,12 +298,8 @@ seek-prefix-ge d
 
 iter
 seek-prefix-ge dd
-next
-next
 ----
 <dd:5>:dd
-<ddd:6>:ddd
-.
 
 # Build a simpler sstable for the rest of the tests.
 build block-size=1 index-block-size=1

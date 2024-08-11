@@ -11,6 +11,7 @@ import (
 	"sync"
 	"unsafe"
 
+	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/internal/treeprinter"
@@ -85,6 +86,8 @@ type singleLevelIterator[D any, PD block.DataBlockIterator[D]] struct {
 	stats      *base.InternalIteratorStats
 	iterStats  iterStatsAccumulator
 	bufferPool *block.BufferPool
+
+	transforms IterTransforms
 
 	// boundsCmp and positionedUsingLatestBounds are for optimizing iteration
 	// that uses multiple adjacent bounds. The seek after setting a new bound
@@ -184,11 +187,16 @@ type singleLevelIterator[D any, PD block.DataBlockIterator[D]] struct {
 	// This happens for example when the bloom filter excludes a prefix.
 	didNotPositionOnLastSeekGE bool
 
-	transforms IterTransforms
-
 	// inPool is set to true before putting the iterator in the reusable pool;
 	// used to detect double-close.
 	inPool bool
+
+	// If prefix is set, the iterator is in prefix iteration mode (i.e. the last
+	// absolute positioning operation was SeekPrefixGE). This is the slice passed
+	// to SeekPrefixGE which the caller guarantees is stable until the next
+	// absolute positioning operation.
+	prefix []byte
+
 	// pool is the pool from which the iterator was allocated and to which the
 	// iterator should be returned on Close. Because the iterator is
 	// parameterized by the type of the data block iterator, pools must be
@@ -660,6 +668,7 @@ func (i *singleLevelIterator[D, PD]) trySeekLTUsingPrevWithinBlock(
 // package. Note that SeekGE only checks the upper bound. It is up to the
 // caller to ensure that key is greater than or equal to the lower bound.
 func (i *singleLevelIterator[D, PD]) SeekGE(key []byte, flags base.SeekGEFlags) *base.InternalKV {
+	i.prefix = nil
 	if i.vState != nil {
 		// Callers of SeekGE don't know about virtual sstable bounds, so we may
 		// have to internally restrict the bounds.
@@ -749,7 +758,7 @@ func (i *singleLevelIterator[D, PD]) seekGEHelper(
 			// optimization. But there may be some benefit even if it is in
 			// the next block, since we can avoid seeking i.index.
 			for j := 0; less && j < numStepsBeforeSeek; j++ {
-				curr = i.Next()
+				curr = i.nextInternal()
 				if curr == nil {
 					return nil
 				}
@@ -820,6 +829,7 @@ func (i *singleLevelIterator[D, PD]) seekGEHelper(
 func (i *singleLevelIterator[D, PD]) SeekPrefixGE(
 	prefix, key []byte, flags base.SeekGEFlags,
 ) *base.InternalKV {
+	i.prefix = prefix
 	if i.vState != nil {
 		// Callers of SeekPrefixGE aren't aware of virtual sstable bounds, so
 		// we may have to internally restrict the bounds.
@@ -836,9 +846,18 @@ func (i *singleLevelIterator[D, PD]) SeekPrefixGE(
 			key = i.lower
 		}
 	}
-	return i.seekPrefixGE(prefix, key, flags)
+	// TODO(radu): we can probably do better in some cases if we push this down
+	// further (e.g. avoid loading a data block that starts after the prefix).
+	if kv := i.seekPrefixGE(prefix, key, flags); kv != nil {
+		if i.reader.Split.HasPrefix(prefix, kv.K.UserKey) {
+			return kv
+		}
+	}
+	return nil
 }
 
+// seekPrefixGE is a helper for SeekPrefixGE. It does not guarantee that the
+// returned key has the given prefix.
 func (i *singleLevelIterator[D, PD]) seekPrefixGE(
 	prefix, key []byte, flags base.SeekGEFlags,
 ) (kv *base.InternalKV) {
@@ -850,10 +869,6 @@ func (i *singleLevelIterator[D, PD]) seekPrefixGE(
 		flags = flags.DisableTrySeekUsingNext()
 		i.didNotPositionOnLastSeekGE = false
 	}
-
-	// NOTE: prefix is only used for bloom filter checking and not later work in
-	// this method. Hence, we can use the existing iterator position if the last
-	// SeekPrefixGE did not fail bloom filter matching.
 
 	err := i.err
 	i.err = nil // clear cached iteration error
@@ -898,7 +913,7 @@ func (i *singleLevelIterator[D, PD]) seekPrefixGE(
 	// Seek optimization only applies until iterator is first positioned after SetBounds.
 	i.boundsCmp = 0
 	i.positionedUsingLatestBounds = true
-	return i.maybeVerifyKey(i.seekGEHelper(key, boundsCmp, flags))
+	return i.seekGEHelper(key, boundsCmp, flags)
 }
 
 // shouldUseFilterBlock returns whether we should use the filter block, based on
@@ -946,6 +961,7 @@ func (i *singleLevelIterator[D, PD]) virtualLast() *base.InternalKV {
 // uses of this method in the future. Does a SeekLE on the upper bound of the
 // file/iterator.
 func (i *singleLevelIterator[D, PD]) virtualLastSeekLE() *base.InternalKV {
+	i.prefix = nil
 	// Callers of SeekLE don't know about virtual sstable bounds, so we may
 	// have to internally restrict the bounds.
 	//
@@ -1030,6 +1046,7 @@ func (i *singleLevelIterator[D, PD]) virtualLastSeekLE() *base.InternalKV {
 // package. Note that SeekLT only checks the lower bound. It is up to the
 // caller to ensure that key is less than or equal to the upper bound.
 func (i *singleLevelIterator[D, PD]) SeekLT(key []byte, flags base.SeekLTFlags) *base.InternalKV {
+	i.prefix = nil
 	if i.vState != nil {
 		// Might have to fix upper bound since virtual sstable bounds are not
 		// known to callers of SeekLT.
@@ -1138,6 +1155,7 @@ func (i *singleLevelIterator[D, PD]) SeekLT(key []byte, flags base.SeekLTFlags) 
 // to ensure that key is greater than or equal to the lower bound (e.g. via a
 // call to SeekGE(lower)).
 func (i *singleLevelIterator[D, PD]) First() *base.InternalKV {
+	i.prefix = nil
 	// If we have a lower bound, use SeekGE. Note that in general this is not
 	// supported usage, except when the lower bound is there because the table is
 	// virtual.
@@ -1206,6 +1224,7 @@ func (i *singleLevelIterator[D, PD]) firstInternal() *base.InternalKV {
 // to ensure that key is less than the upper bound (e.g. via a call to
 // SeekLT(upper))
 func (i *singleLevelIterator[D, PD]) Last() *base.InternalKV {
+	i.prefix = nil
 	if i.vState != nil {
 		return i.maybeVerifyKey(i.virtualLast())
 	}
@@ -1265,6 +1284,16 @@ func (i *singleLevelIterator[D, PD]) lastInternal() *base.InternalKV {
 // Note: compactionIterator.Next mirrors the implementation of Iterator.Next
 // due to performance. Keep the two in sync.
 func (i *singleLevelIterator[D, PD]) Next() *base.InternalKV {
+	kv := i.nextInternal()
+	if kv != nil && i.prefix != nil && !i.reader.Split.HasPrefix(i.prefix, kv.K.UserKey) {
+		return nil
+	}
+	return kv
+}
+
+// nextInternal moves to the next key. It does not check the prefix if we are in
+// prefix iteration mode.
+func (i *singleLevelIterator[D, PD]) nextInternal() *base.InternalKV {
 	if i.exhaustedBounds == +1 {
 		panic("Next called even though exhausted upper bound")
 	}
@@ -1292,6 +1321,10 @@ func (i *singleLevelIterator[D, PD]) Next() *base.InternalKV {
 
 // NextPrefix implements (base.InternalIterator).NextPrefix.
 func (i *singleLevelIterator[D, PD]) NextPrefix(succKey []byte) *base.InternalKV {
+	if i.prefix != nil {
+		i.err = errors.AssertionFailedf("NextPrefix not supported in prefix iteration mode")
+		return nil
+	}
 	if i.exhaustedBounds == +1 {
 		panic("NextPrefix called even though exhausted upper bound")
 	}
@@ -1369,6 +1402,10 @@ func (i *singleLevelIterator[D, PD]) NextPrefix(succKey []byte) *base.InternalKV
 // Prev implements internalIterator.Prev, as documented in the pebble
 // package.
 func (i *singleLevelIterator[D, PD]) Prev() *base.InternalKV {
+	if i.prefix != nil {
+		i.err = errors.AssertionFailedf("Prev not supported in prefix iteration mode")
+		return nil
+	}
 	if i.exhaustedBounds == -1 {
 		panic("Prev called even though exhausted lower bound")
 	}

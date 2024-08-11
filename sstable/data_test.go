@@ -19,7 +19,6 @@ import (
 	"github.com/cockroachdb/pebble/internal/cache"
 	"github.com/cockroachdb/pebble/internal/keyspan"
 	"github.com/cockroachdb/pebble/internal/sstableinternal"
-	"github.com/cockroachdb/pebble/internal/testkeys"
 	"github.com/cockroachdb/pebble/objstorage"
 	"github.com/cockroachdb/pebble/objstorage/objstorageprovider"
 	"github.com/cockroachdb/pebble/sstable/rowblk"
@@ -269,6 +268,7 @@ type runIterCmdOptions struct {
 	everyOp       func(io.Writer)
 	stats         *base.InternalIteratorStats
 	maskingFilter TestKeysMaskingFilter
+	printValue    bool
 }
 
 func runIterCmdEveryOp(everyOp func(io.Writer)) runIterCmdOption {
@@ -285,8 +285,13 @@ func runIterCmdMaskingFilter(maskingFilter TestKeysMaskingFilter) runIterCmdOpti
 	return func(opts *runIterCmdOptions) { opts.maskingFilter = maskingFilter }
 }
 
+// runIterCmdPrintValue enables printing of KV values.
+func runIterCmdPrintValue() runIterCmdOption {
+	return func(opts *runIterCmdOptions) { opts.printValue = true }
+}
+
 func runIterCmd(
-	td *datadriven.TestData, origIter Iterator, printValue bool, opt ...runIterCmdOption,
+	td *datadriven.TestData, comparer *base.Comparer, origIter Iterator, opt ...runIterCmdOption,
 ) string {
 	var opts runIterCmdOptions
 	for _, o := range opt {
@@ -297,7 +302,6 @@ func runIterCmd(
 	defer iter.Close()
 
 	var b bytes.Buffer
-	var prefix []byte
 	var maskingSuffix []byte
 	skipMaskedKeys := func(direction int) {
 		if len(maskingSuffix) == 0 {
@@ -305,8 +309,8 @@ func runIterCmd(
 		}
 		for iter.Valid() {
 			k := iter.Key().UserKey
-			suffix := k[testkeys.Comparer.Split(k):]
-			if len(suffix) == 0 || testkeys.Comparer.CompareSuffixes(suffix, maskingSuffix) <= 0 {
+			suffix := k[comparer.Split(k):]
+			if len(suffix) == 0 || comparer.CompareSuffixes(suffix, maskingSuffix) <= 0 {
 				return
 			}
 			if direction > 0 {
@@ -326,7 +330,6 @@ func runIterCmd(
 			if len(parts) < 2 || len(parts) > 3 {
 				return "seek-ge <key> [<try-seek-using-next]\n"
 			}
-			prefix = nil
 			var flags base.SeekGEFlags
 			if len(parts) == 3 {
 				if trySeekUsingNext, err := strconv.ParseBool(parts[2]); err != nil {
@@ -341,7 +344,7 @@ func runIterCmd(
 			if len(parts) != 2 && len(parts) != 3 {
 				return "seek-prefix-ge <key> [<try-seek-using-next>]\n"
 			}
-			prefix = []byte(strings.TrimSpace(parts[1]))
+			key := []byte(strings.TrimSpace(parts[1]))
 			var flags base.SeekGEFlags
 			if len(parts) == 3 {
 				if trySeekUsingNext, err := strconv.ParseBool(parts[2]); err != nil {
@@ -350,21 +353,18 @@ func runIterCmd(
 					flags = flags.EnableTrySeekUsingNext()
 				}
 			}
-			iter.SeekPrefixGE(prefix, prefix /* key */, flags)
+			iter.SeekPrefixGE(comparer.Split.Prefix(key), key, flags)
 			skipMaskedKeys(+1)
 		case "seek-lt":
 			if len(parts) != 2 {
 				return "seek-lt <key>\n"
 			}
-			prefix = nil
 			iter.SeekLT([]byte(strings.TrimSpace(parts[1])), base.SeekLTFlagsNone)
 			skipMaskedKeys(-1)
 		case "first":
-			prefix = nil
 			iter.First()
 			skipMaskedKeys(+1)
 		case "last":
-			prefix = nil
 			iter.Last()
 			skipMaskedKeys(-1)
 		case "next":
@@ -383,9 +383,9 @@ func runIterCmd(
 				return "next-prefix cannot be called on exhauster iterator\n"
 			}
 			k := iter.Key().UserKey
-			prefixLen := testkeys.Comparer.Split(k)
+			prefixLen := comparer.Split(k)
 			k = k[:prefixLen]
-			kSucc := testkeys.Comparer.ImmediateSuccessor(nil, k)
+			kSucc := comparer.ImmediateSuccessor(nil, k)
 			iter.NextPrefix(kSucc)
 			skipMaskedKeys(+1)
 		case "set-bounds":
@@ -471,9 +471,9 @@ func runIterCmd(
 		if opts.everyOp != nil {
 			opts.everyOp(&b)
 		}
-		if iter.Valid() && checkValidPrefix(prefix, iter.Key().UserKey) {
+		if iter.Valid() {
 			fmt.Fprintf(&b, "<%s:%d>", iter.Key().UserKey, iter.Key().SeqNum())
-			if printValue {
+			if opts.printValue {
 				fmt.Fprintf(&b, ":%s", string(iter.Value()))
 			}
 		} else if err := iter.Error(); err != nil {
