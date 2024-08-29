@@ -28,7 +28,7 @@ import (
 	"github.com/cockroachdb/pebble/internal/rangedel"
 	"github.com/cockroachdb/pebble/internal/rangekey"
 	"github.com/cockroachdb/pebble/internal/rawalloc"
-	"github.com/cockroachdb/pebble/internal/treeprinter"
+	"github.com/cockroachdb/pebble/internal/treesteps"
 )
 
 const (
@@ -1825,9 +1825,9 @@ func (i *batchIter) SetBounds(lower, upper []byte) {
 
 func (i *batchIter) SetContext(_ context.Context) {}
 
-// DebugTree is part of the InternalIterator interface.
-func (i *batchIter) DebugTree(tp treeprinter.Node) {
-	tp.Childf("%T(%p)", i, i)
+// TreeStepsNode is part of the InternalIterator interface.
+func (i *batchIter) TreeStepsNode() treesteps.NodeInfo {
+	return treesteps.NodeInfof("%T(%p)", i, i)
 }
 
 type flushableBatchEntry struct {
@@ -2334,9 +2334,9 @@ func (i *flushableBatchIter) SetBounds(lower, upper []byte) {
 
 func (i *flushableBatchIter) SetContext(_ context.Context) {}
 
-// DebugTree is part of the InternalIterator interface.
-func (i *flushableBatchIter) DebugTree(tp treeprinter.Node) {
-	tp.Childf("%T(%p)", i, i)
+// TreeStepsNode is part of the InternalIterator interface.
+func (i *flushableBatchIter) TreeStepsNode() treesteps.NodeInfo {
+	return treesteps.NodeInfof("%T(%p)", i, i)
 }
 
 // flushFlushableBatchIter is similar to flushableBatchIter but it keeps track

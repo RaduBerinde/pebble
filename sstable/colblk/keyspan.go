@@ -15,7 +15,7 @@ import (
 	"github.com/cockroachdb/pebble/internal/binfmt"
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/internal/keyspan"
-	"github.com/cockroachdb/pebble/internal/treeprinter"
+	"github.com/cockroachdb/pebble/internal/treesteps"
 )
 
 // the keyspan header encodes a 32-bit count of the number of unique boundary
@@ -418,7 +418,7 @@ func (i *KeyspanIter) SetContext(context.Context) {}
 // WrapChildren implements keyspan.FragmentIterator.
 func (i *KeyspanIter) WrapChildren(keyspan.WrapFn) {}
 
-// DebugTree is part of the FragmentIterator interface.
-func (i *KeyspanIter) DebugTree(tp treeprinter.Node) {
-	tp.Childf("%T(%p)", i, i)
+// TreeStepsNode is part of the FragmentIterator interface.
+func (i *KeyspanIter) TreeStepsNode() treesteps.NodeInfo {
+	return treesteps.NodeInfof("%T(%p)", i, i)
 }

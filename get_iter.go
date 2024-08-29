@@ -11,7 +11,7 @@ import (
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/keyspan"
 	"github.com/cockroachdb/pebble/internal/manifest"
-	"github.com/cockroachdb/pebble/internal/treeprinter"
+	"github.com/cockroachdb/pebble/internal/treesteps"
 )
 
 // getIter is an internal iterator used to perform gets. It iterates through
@@ -162,12 +162,11 @@ func (g *getIter) SetBounds(lower, upper []byte) {
 
 func (g *getIter) SetContext(_ context.Context) {}
 
-// DebugTree is part of the InternalIterator interface.
-func (g *getIter) DebugTree(tp treeprinter.Node) {
-	n := tp.Childf("%T(%p)", g, g)
-	if g.iter != nil {
-		g.iter.DebugTree(n)
-	}
+// TreeStepsNode is part of the InternalIterator interface.
+func (g *getIter) TreeStepsNode() treesteps.NodeInfo {
+	info := treesteps.NodeInfof("%T(%p)", g, g)
+	info.AddChildren(g.iter)
+	return info
 }
 
 func (g *getIter) initializeNextIterator() (ok bool) {
