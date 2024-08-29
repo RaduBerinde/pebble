@@ -14,7 +14,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/invariants"
-	"github.com/cockroachdb/pebble/internal/treeprinter"
+	"github.com/cockroachdb/pebble/internal/treesteps"
 	"github.com/cockroachdb/pebble/objstorage"
 	"github.com/cockroachdb/pebble/objstorage/objstorageprovider"
 	"github.com/cockroachdb/pebble/sstable/block"
@@ -516,6 +516,9 @@ func (i *singleLevelIterator[I, PI, P, PD]) loadDataBlock(dir int8) loadBlockRes
 		return loadBlockFailed
 	}
 	i.initBounds()
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		treesteps.NodeUpdated(i, fmt.Sprintf("loadDataBlock(%d) offset=%d length=%d", dir, i.dataBH.Offset, i.dataBH.Length))
+	}
 	return loadBlockOK
 }
 
@@ -649,7 +652,13 @@ func (i *singleLevelIterator[I, PI, D, PD]) trySeekLTUsingPrevWithinBlock(
 // caller to ensure that key is greater than or equal to the lower bound.
 func (i *singleLevelIterator[I, PI, D, PD]) SeekGE(
 	key []byte, flags base.SeekGEFlags,
-) *base.InternalKV {
+) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "SeekGE(%q, %d)", key, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	// Clear the tracking flag since this is a new absolute positioning operation
 	i.lastOpWasSeekPrefixGE.Set(false)
 	// The synthetic key is no longer relevant and must be cleared.
@@ -697,7 +706,13 @@ func (i *singleLevelIterator[I, PI, D, PD]) SeekGE(
 // seekGEHelper contains the common functionality for SeekGE and SeekPrefixGE.
 func (i *singleLevelIterator[I, PI, D, PD]) seekGEHelper(
 	key []byte, boundsCmp int, flags base.SeekGEFlags,
-) *base.InternalKV {
+) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "seekGEHelper(%q, %d, %d)", key, boundsCmp, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	if !i.ensureIndexLoaded() {
 		return nil
 	}
@@ -808,7 +823,13 @@ func (i *singleLevelIterator[I, PI, D, PD]) seekGEHelper(
 // to the caller to ensure that key is greater than or equal to the lower bound.
 func (i *singleLevelIterator[I, PI, D, PD]) SeekPrefixGE(
 	prefix, key []byte, flags base.SeekGEFlags,
-) *base.InternalKV {
+) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "SeekPrefixGE(%q, %q, %d)", prefix, key, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	if i.synthetic.atSyntheticKey {
 		// TODO(sachin) : We have to disable the optimization to avoid false data
 		// invalidation if there are back to back SeekPrefixGE calls. Currently
@@ -921,12 +942,16 @@ func (i *singleLevelIterator[I, PI, D, PD]) seekPrefixGE(
 			return nil
 		}
 		if !mayContain {
+			if treesteps.Enabled && treesteps.IsRecording(i) {
+				treesteps.UpdateLastOpf(i, "pass bloom filter did not match")
+			}
 			// In the no-error bloom filter miss case, the key is definitely not in table.
 			// We can avoid invalidating the already loaded block since the caller is
 			// not allowed to call Next when SeekPrefixGE returns nil.
 			i.lastOpWasSeekPrefixGE.Set(true)
 			return nil
 		}
+		treesteps.UpdateLastOpf(i, "bloom filter matched")
 		i.lastBloomFilterMatched = true
 	}
 	if flags.TrySeekUsingNext() {
@@ -1093,7 +1118,13 @@ func (i *singleLevelIterator[I, PI, D, PD]) virtualLastSeekLE() *base.InternalKV
 // caller to ensure that key is less than or equal to the upper bound.
 func (i *singleLevelIterator[I, PI, D, PD]) SeekLT(
 	key []byte, flags base.SeekLTFlags,
-) *base.InternalKV {
+) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "SeekLT(%q, %d)", key, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	// Clear the tracking flag since this is a new absolute positioning operation
 	i.lastOpWasSeekPrefixGE.Set(false)
 	// The synthetic key is no longer relevant and must be cleared.
@@ -1208,7 +1239,13 @@ func (i *singleLevelIterator[I, PI, D, PD]) SeekLT(
 // package. Note that First only checks the upper bound. It is up to the caller
 // to ensure that key is greater than or equal to the lower bound (e.g. via a
 // call to SeekGE(lower)).
-func (i *singleLevelIterator[I, PI, D, PD]) First() *base.InternalKV {
+func (i *singleLevelIterator[I, PI, D, PD]) First() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "First()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	// Clear the tracking flag since this is a new absolute positioning operation
 	i.lastOpWasSeekPrefixGE.Set(false)
 	// The synthetic key is no longer relevant and must be cleared.
@@ -1282,7 +1319,13 @@ func (i *singleLevelIterator[I, PI, D, PD]) firstInternal() *base.InternalKV {
 // package. Note that Last only checks the lower bound. It is up to the caller
 // to ensure that key is less than the upper bound (e.g. via a call to
 // SeekLT(upper))
-func (i *singleLevelIterator[I, PI, D, PD]) Last() *base.InternalKV {
+func (i *singleLevelIterator[I, PI, D, PD]) Last() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "Last()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	// Clear the tracking flag since this is a new absolute positioning operation
 	i.lastOpWasSeekPrefixGE.Set(false)
 	// The synthetic key is no longer relevant and must be cleared.
@@ -1708,9 +1751,17 @@ func (i *singleLevelIterator[I, PI, D, PD]) String() string {
 	return i.reader.blockReader.FileNum().String()
 }
 
-// DebugTree is part of the InternalIterator interface.
-func (i *singleLevelIterator[I, PI, D, PD]) DebugTree(tp treeprinter.Node) {
-	tp.Childf("%T(%p) fileNum=%s", i, i, i.String())
+// TreeStepsNode is part of the InternalIterator interface.
+func (i *singleLevelIterator[I, PI, D, PD]) TreeStepsNode() treesteps.NodeInfo {
+	info := treesteps.NodeInfof("sstable.singleLevelIterator")
+	info.AddPropf("file", "%s", i.String())
+	if !i.indexLoaded || PI(&i.index).IsDataInvalidated() {
+		info.AddPropf("index block", "not loaded")
+	}
+	if !PD(&i.data).IsDataInvalidated() && !PD(&i.data).IsDataInvalidated() {
+		info.AddPropf("data block", "offset=%d length=%d", i.dataBH.Offset, i.dataBH.Length)
+	}
+	return info
 }
 
 func (i *singleLevelIterator[I, PI, D, PD]) ensureIndexLoaded() bool {
@@ -1732,5 +1783,8 @@ func (i *singleLevelIterator[I, PI, D, PD]) ensureIndexLoaded() bool {
 	}
 
 	i.indexLoaded = true
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		treesteps.NodeUpdated(i, "index block loaded")
+	}
 	return true
 }

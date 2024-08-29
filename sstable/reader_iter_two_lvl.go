@@ -14,7 +14,7 @@ import (
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/invariants"
-	"github.com/cockroachdb/pebble/internal/treeprinter"
+	"github.com/cockroachdb/pebble/internal/treesteps"
 	"github.com/cockroachdb/pebble/objstorage"
 	"github.com/cockroachdb/pebble/sstable/valblk"
 )
@@ -88,6 +88,9 @@ func (i *twoLevelIterator[I, PI, D, PD]) loadSecondLevelIndexBlock(dir int8) loa
 		PI(&i.secondLevel.index).Invalidate()
 		i.secondLevel.err = err
 		return loadBlockFailed
+	}
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		treesteps.NodeUpdated(i, fmt.Sprintf("loadSecondLevelIndexBlock(%d) offset=%d length=%d", dir, bhp.Offset, bhp.Length))
 	}
 	return loadBlockOK
 }
@@ -254,9 +257,14 @@ func (i *twoLevelIterator[I, PI, D, PD]) String() string {
 	return i.secondLevel.String()
 }
 
-// DebugTree is part of the InternalIterator interface.
-func (i *twoLevelIterator[I, PI, D, PD]) DebugTree(tp treeprinter.Node) {
-	tp.Childf("%T(%p) fileNum=%s", i, i, i.String())
+// TreeStepsNode is part of the InternalIterator interface.
+func (i *twoLevelIterator[I, PI, D, PD]) TreeStepsNode() treesteps.NodeInfo {
+	info := treesteps.NodeInfof("sstable.twoLevelIterator")
+	if !i.topLevelIndexLoaded {
+		info.AddPropf("top-level index block", "not loaded")
+	}
+	info.AddChildren(&i.secondLevel)
+	return info
 }
 
 // SeekGE implements internalIterator.SeekGE, as documented in the pebble
@@ -264,7 +272,13 @@ func (i *twoLevelIterator[I, PI, D, PD]) DebugTree(tp treeprinter.Node) {
 // caller to ensure that key is greater than or equal to the lower bound.
 func (i *twoLevelIterator[I, PI, D, PD]) SeekGE(
 	key []byte, flags base.SeekGEFlags,
-) *base.InternalKV {
+) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "SeekGE(%q, %d)", key, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	// The synthetic key is no longer relevant and must be cleared.
 	i.secondLevel.synthetic.atSyntheticKey = false
 	i.lastOpWasSeekPrefixGE.Set(false)
@@ -409,7 +423,13 @@ func (i *twoLevelIterator[I, PI, D, PD]) SeekGE(
 // to the caller to ensure that key is greater than or equal to the lower bound.
 func (i *twoLevelIterator[I, PI, D, PD]) SeekPrefixGE(
 	prefix, key []byte, flags base.SeekGEFlags,
-) *base.InternalKV {
+) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "SeekPrefixGE(%q, %q, %d)", prefix, key, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	i.lastOpWasSeekPrefixGE.Set(false)
 
 	if i.secondLevel.synthetic.atSyntheticKey {
@@ -532,12 +552,16 @@ func (i *twoLevelIterator[I, PI, D, PD]) seekPrefixGE(
 			return nil
 		}
 		if !mayContain {
+			if treesteps.Enabled && treesteps.IsRecording(i) {
+				treesteps.UpdateLastOpf(i, "pass bloom filter did not match")
+			}
 			// In the no-error bloom filter miss case, the key is definitely not in table.
 			// We can avoid invalidating the already loaded block since the caller is
 			// not allowed to call Next when SeekPrefixGE returns nil.
 			i.lastOpWasSeekPrefixGE.Set(true)
 			return nil
 		}
+		treesteps.UpdateLastOpf(i, "bloom filter matched")
 		i.lastBloomFilterMatched = true
 	}
 
@@ -718,7 +742,13 @@ func (i *twoLevelIterator[I, PI, D, PD]) virtualLastSeekLE() *base.InternalKV {
 // caller to ensure that key is less than the upper bound.
 func (i *twoLevelIterator[I, PI, D, PD]) SeekLT(
 	key []byte, flags base.SeekLTFlags,
-) *base.InternalKV {
+) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "SeekLT(%q, %d)", key, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	i.lastOpWasSeekPrefixGE.Set(false)
 	// The synthetic key is no longer relevant and must be cleared.
 	i.secondLevel.synthetic.atSyntheticKey = false
@@ -807,7 +837,13 @@ func (i *twoLevelIterator[I, PI, D, PD]) SeekLT(
 // package. Note that First only checks the upper bound. It is up to the caller
 // to ensure that key is greater than or equal to the lower bound (e.g. via a
 // call to SeekGE(lower)).
-func (i *twoLevelIterator[I, PI, D, PD]) First() *base.InternalKV {
+func (i *twoLevelIterator[I, PI, D, PD]) First() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "First()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	i.lastOpWasSeekPrefixGE.Set(false)
 	// The synthetic key is no longer relevant and must be cleared.
 	i.secondLevel.synthetic.atSyntheticKey = false
@@ -860,7 +896,13 @@ func (i *twoLevelIterator[I, PI, D, PD]) First() *base.InternalKV {
 // package. Note that Last only checks the lower bound. It is up to the caller
 // to ensure that key is less than the upper bound (e.g. via a call to
 // SeekLT(upper))
-func (i *twoLevelIterator[I, PI, D, PD]) Last() *base.InternalKV {
+func (i *twoLevelIterator[I, PI, D, PD]) Last() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "Last()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	i.lastOpWasSeekPrefixGE.Set(false)
 	// The synthetic key is no longer relevant and must be cleared.
 	i.secondLevel.synthetic.atSyntheticKey = false
@@ -1195,8 +1237,11 @@ func (i *twoLevelIterator[I, PI, D, PD]) ensureTopLevelIndexLoaded() bool {
 		i.secondLevel.err = err
 		return false
 	}
-
 	i.topLevelIndexLoaded = true
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		treesteps.NodeUpdated(i, "top level index block loaded")
+	}
+
 	return true
 }
 

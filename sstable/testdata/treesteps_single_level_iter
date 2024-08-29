@@ -1,0 +1,18 @@
+# Test treesteps recording for singleLevelIterator SeekPrefixGE operation.
+# This test builds a simple sstable and performs a SeekPrefixGE operation
+# while recording the operation steps with treesteps, then outputs the
+# visualization URL.
+
+build
+a@10#1,SET = va10
+a@5#1,SET = va5
+b@8#1,SET = vb8
+c#1,SET = vc
+c@12#1,SET = vc12
+c@7#1,SET = vc7
+----
+
+iter-treesteps
+seek-prefix-ge a
+----
+https://raduberinde.github.io/treesteps/decode.html#eJzUlMFKMzEUhff_U1zyb1oYdAbRxUBBxFIFEaHunFJS50wbGpOSXKQgQleuXczSp5snkUxb6aIM7aJYZzOQe869X05I3sS9fIFIBcNzLlmesgM8Y-aHXpmxxlDjFXqoGC5NzkUk-oxZMHmRPgllFCupwzIwfXAo1LzXJWvIe5YjjZNll7vQ5JbhJFtHnqVj5CISHpj2ujfQM7jdXcbmaJKmpEyOOY20fZ6StjLf0Rak15LlVTC2kjbZovDgTkwaZsyTTnJ2sSd1oYzyk3r-PhH92AbLxOu0GwyZoar8qspFVS6oUBopxfVXF8pVYSOWlIzlVTaZCZtqoKHq45M28VuZkJmIaPWL2789fynZPJi1JP4reOVWvONIJjwN62C23InDY1KH5GUS_0-ifvfxaJgPATV4__cdAAD__4QSB68=
