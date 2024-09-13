@@ -144,7 +144,7 @@ func (ui *UserIteratorConfig) SetBounds(lower, upper []byte) {
 // sequence number, and hold their Keys sorted by Suffix (except if internalKeys
 // is true, then keys remain sorted by trailer.
 func (ui *UserIteratorConfig) Transform(
-	suffixCmp base.CompareSuffixes, s keyspan.Span, dst *keyspan.Span,
+	suffixCmp base.CompareRangeKeySuffixes, s keyspan.Span, dst *keyspan.Span,
 ) error {
 	// Apply shadowing of keys.
 	dst.Start = s.Start

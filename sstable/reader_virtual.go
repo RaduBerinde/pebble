@@ -190,9 +190,9 @@ func (v *VirtualReader) NewRawRangeKeyIter(
 			SeqNum: base.SeqNum(syntheticSeqNum),
 		}
 		transformIter := &keyspan.TransformerIter{
-			FragmentIterator: iter,
-			Transformer:      transform,
-			SuffixCmp:        v.reader.SuffixCmp,
+			FragmentIterator:  iter,
+			Transformer:       transform,
+			RangeKeySuffixCmp: v.reader.RangeKeySuffixCmp,
 		}
 		iter = transformIter
 	}

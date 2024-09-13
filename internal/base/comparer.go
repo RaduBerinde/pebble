@@ -23,6 +23,16 @@ import (
 // Suffixes are compared to break ties between equal prefixes.
 type CompareSuffixes func(a, b []byte) int
 
+// CompareRangeKeySuffixes is like CompareSuffixes but it is used when resolving
+// and coalescing range keys.
+//
+// For historical reasons (see
+// https://github.com/cockroachdb/cockroach/issues/130533 for a summary), we
+// allow this function to be more strict than CompareSuffixes. Specifically: it
+// must agree with CompareSuffixes when the latter returns -1 or +1; but when
+// CompareSuffixes returns 0, CompareRangeKeySuffixes can return any value.
+type CompareRangeKeySuffixes func(a, b []byte) int
+
 // Compare returns -1, 0, or +1 depending on whether a is 'less than', 'equal
 // to' or 'greater than' b.
 //
@@ -180,6 +190,8 @@ type Comparer struct {
 
 	// CompareSuffixes defaults to bytes.Compare if it is not specified.
 	CompareSuffixes CompareSuffixes
+	// CompareRangeKeySuffixes defaults to CompareSuffixes if it is not specified.
+	CompareRangeKeySuffixes CompareRangeKeySuffixes
 
 	// Compare defaults to a generic implementation that uses Split,
 	// bytes.Compare, and CompareSuffixes if it is not specified.
@@ -221,13 +233,17 @@ func (c *Comparer) EnsureDefaults() *Comparer {
 	if n.Split == nil {
 		n.Split = DefaultSplit
 	}
-	if n.CompareSuffixes == nil && n.Compare == nil && n.Equal == nil {
+	if n.CompareSuffixes == nil && n.CompareRangeKeySuffixes == nil && n.Compare == nil && n.Equal == nil {
 		n.CompareSuffixes = bytes.Compare
+		n.CompareRangeKeySuffixes = bytes.Compare
 		n.Compare = bytes.Compare
 		n.Equal = bytes.Equal
 	} else {
 		if n.CompareSuffixes == nil {
 			n.CompareSuffixes = bytes.Compare
+		}
+		if n.CompareRangeKeySuffixes == nil {
+			n.CompareRangeKeySuffixes = CompareRangeKeySuffixes(n.CompareSuffixes)
 		}
 		if n.Compare == nil {
 			n.Compare = func(a, b []byte) int {
@@ -249,9 +265,10 @@ func (c *Comparer) EnsureDefaults() *Comparer {
 // DefaultComparer is the default implementation of the Comparer interface.
 // It uses the natural ordering, consistent with bytes.Compare.
 var DefaultComparer = &Comparer{
-	CompareSuffixes: bytes.Compare,
-	Compare:         bytes.Compare,
-	Equal:           bytes.Equal,
+	CompareSuffixes:         bytes.Compare,
+	CompareRangeKeySuffixes: bytes.Compare,
+	Compare:                 bytes.Compare,
+	Equal:                   bytes.Equal,
 
 	AbbreviatedKey: func(key []byte) uint64 {
 		if len(key) >= 8 {
@@ -397,6 +414,16 @@ func MakeAssertComparer(c Comparer) Comparer {
 			return eq
 		},
 
+		CompareRangeKeySuffixes: func(a []byte, b []byte) int {
+			res := c.CompareRangeKeySuffixes(a, b)
+			// Cross-check against CompareSuffixes: we can disagree only when the latter returns 0.
+			if check := c.CompareSuffixes(a, b); check != 0 && res != check {
+				panic(AssertionFailedf("%s: RangeKeySuffixesEqual(%s, %s) = %d, but CompareSuffixes(%s, %s) = %d",
+					c.Name, c.FormatKey(a), c.FormatKey(b), res, c.FormatKey(a), c.FormatKey(b), check))
+			}
+			return res
+		},
+
 		// TODO(radu): add more checks.
 		CompareSuffixes:    c.CompareSuffixes,
 		AbbreviatedKey:     c.AbbreviatedKey,
@@ -454,6 +481,10 @@ func CheckComparer(c *Comparer, prefixes [][]byte, suffixes [][]byte) error {
 
 					if result != expected {
 						return errors.Errorf("Compare(%s, %s)=%d, expected %d", c.FormatKey(a), c.FormatKey(b), result, expected)
+					}
+
+					if cmp1, cmp2 := c.CompareRangeKeySuffixes(as, bs), c.CompareSuffixes(as, bs); cmp2 != 0 && cmp1 != cmp2 {
+						return errors.Errorf("RangeKeySuffixesEqual(%s, %s)=%d but CompareSuffixes()=%d", c.FormatKey(as), c.FormatKey(bs), cmp1, cmp2)
 					}
 				}
 			}

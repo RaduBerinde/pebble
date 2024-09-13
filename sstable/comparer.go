@@ -12,6 +12,9 @@ type Compare = base.Compare
 // CompareSuffixes exports the base.CompareSuffixes type.
 type CompareSuffixes = base.CompareSuffixes
 
+// CompareRangeKeySuffixes exports the base.CompareRangeKeySuffixes type.
+type CompareRangeKeySuffixes = base.CompareRangeKeySuffixes
+
 // Equal exports the base.Equal type.
 type Equal = base.Equal
 

@@ -891,7 +891,7 @@ func newCombinedDeletionKeyspanIter(
 	// merging iter to join the keyspaces into a single keyspace. The separate
 	// iters are only added if the particular key kind is present.
 	mIter := &keyspanimpl.MergingIter{}
-	var transform = keyspan.TransformerFunc(func(_ base.CompareSuffixes, in keyspan.Span, out *keyspan.Span) error {
+	var transform = keyspan.TransformerFunc(func(_ base.CompareRangeKeySuffixes, in keyspan.Span, out *keyspan.Span) error {
 		if in.KeysOrder != keyspan.ByTrailerDesc {
 			panic("pebble: combined deletion iter encountered keys in non-trailer descending order")
 		}
