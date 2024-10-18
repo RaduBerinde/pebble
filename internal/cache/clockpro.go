@@ -66,6 +66,8 @@ func (h Handle) Valid() bool {
 
 // RawBuffer returns the value buffer. Note that this buffer holds the block
 // metadata and the data and should be used through a block.BufferHandle.
+//
+// RawBuffer can only be called if the handle is Valid().
 func (h Handle) RawBuffer() []byte {
 	// NB: We don't increment shard.hits in this code path because we only want
 	// to record a hit when the handle is retrieved from the cache.
