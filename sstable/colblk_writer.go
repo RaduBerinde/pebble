@@ -671,6 +671,7 @@ func (w *RawColumnWriter) enqueueDataBlock(
 		// lifetime of the DataBlockWriters?
 		cb.physical, cb.blockBuf.dataBuf = cb.physical.CloneUsingBuf(cb.blockBuf.dataBuf)
 	}
+	w.layout.ReportWrittenBlock(w.queuedDataSize, serializedBlock)
 	return w.enqueuePhysicalBlock(cb, separator)
 }
 
@@ -806,7 +807,8 @@ func (w *RawColumnWriter) flushBufferedIndexBlocks() (rootIndex block.Handle, er
 			w.props.NumDataBlocks += uint64(w.indexBuffering.partitions[0].nEntries)
 			w.topLevelIndexBlock.AddBlockHandle(part.sep.UserKey, bh, part.properties)
 		}
-		rootIndex, err = w.layout.WriteIndexBlock(w.topLevelIndexBlock.Finish(w.topLevelIndexBlock.Rows()))
+		serializedBlock := w.topLevelIndexBlock.Finish(w.topLevelIndexBlock.Rows())
+		rootIndex, err = w.layout.WriteIndexBlock(serializedBlock)
 		if err != nil {
 			return block.Handle{}, err
 		}

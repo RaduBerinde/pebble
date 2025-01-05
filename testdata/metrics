@@ -29,7 +29,7 @@ Snapshots: 4  earliest seq num: 1024
 Table iters: 21
 Filter utility: 47.4%
 Ingestions: 27  as flushable: 36 (34B in 35 tables)
-Cgo memory usage: 15KB  block cache: 9.0KB (data: 4.0KB, maps: 2.0KB, entries: 3.0KB)  memtables: 5.0KB
+Cgo memory usage: 21KB  block cache: 14KB (data: 4.0KB, recently-written: 5.0KB, maps: 2.0KB, entries: 3.0KB)  memtables: 6.0KB
 
 init
 ----
@@ -82,7 +82,7 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 1
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
                    b,     latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
@@ -142,9 +142,9 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 2
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:44 BlockReadDuration:10ms}
+   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:88 BlockReadDuration:0s}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
                    b,     latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
@@ -189,9 +189,9 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 2
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:44 BlockReadDuration:10ms}
+   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:88 BlockReadDuration:0s}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
                    b,     latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
@@ -233,9 +233,9 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 1
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:44 BlockReadDuration:10ms}
+   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:88 BlockReadDuration:0s}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
                    b,     latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
@@ -280,11 +280,11 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:44 BlockReadDuration:10ms}
+   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:88 BlockReadDuration:0s}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
-                   b,     latency: {BlockBytes:44 BlockBytesInCache:0 BlockReadDuration:10ms}
+                   b,     latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
 
 disk-usage
@@ -353,11 +353,11 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:44 BlockReadDuration:10ms}
+   pebble-compaction, non-latency: {BlockBytes:88 BlockBytesInCache:88 BlockReadDuration:0s}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
-                   b,     latency: {BlockBytes:44 BlockBytesInCache:0 BlockReadDuration:10ms}
+                   b,     latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
 
 additional-metrics
@@ -410,11 +410,11 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:301 BlockBytesInCache:44 BlockReadDuration:60ms}
+   pebble-compaction, non-latency: {BlockBytes:301 BlockBytesInCache:283 BlockReadDuration:20ms}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
-                   b,     latency: {BlockBytes:44 BlockBytesInCache:0 BlockReadDuration:10ms}
+                   b,     latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
 
 additional-metrics
@@ -516,12 +516,12 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 2  as flushable: 2 (1.7KB in 3 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:301 BlockBytesInCache:44 BlockReadDuration:60ms}
-       pebble-ingest,     latency: {BlockBytes:64 BlockBytesInCache:0 BlockReadDuration:10ms}
+   pebble-compaction, non-latency: {BlockBytes:301 BlockBytesInCache:283 BlockReadDuration:20ms}
+       pebble-ingest,     latency: {BlockBytes:64 BlockBytesInCache:64 BlockReadDuration:0s}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
-                   b,     latency: {BlockBytes:44 BlockBytesInCache:0 BlockReadDuration:10ms}
+                   b,     latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
 
 batch
@@ -581,12 +581,12 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 2  as flushable: 2 (1.7KB in 3 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:301 BlockBytesInCache:44 BlockReadDuration:60ms}
-       pebble-ingest,     latency: {BlockBytes:64 BlockBytesInCache:0 BlockReadDuration:10ms}
+   pebble-compaction, non-latency: {BlockBytes:301 BlockBytesInCache:283 BlockReadDuration:20ms}
+       pebble-ingest,     latency: {BlockBytes:64 BlockBytesInCache:64 BlockReadDuration:0s}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
-                   b,     latency: {BlockBytes:44 BlockBytesInCache:0 BlockReadDuration:10ms}
+                   b,     latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
 
 build ext1
@@ -660,12 +660,12 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 3  as flushable: 2 (1.7KB in 3 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:301 BlockBytesInCache:44 BlockReadDuration:60ms}
-       pebble-ingest,     latency: {BlockBytes:200 BlockBytesInCache:0 BlockReadDuration:30ms}
+   pebble-compaction, non-latency: {BlockBytes:301 BlockBytesInCache:283 BlockReadDuration:20ms}
+       pebble-ingest,     latency: {BlockBytes:200 BlockBytesInCache:200 BlockReadDuration:0s}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
-                   b,     latency: {BlockBytes:44 BlockBytesInCache:0 BlockReadDuration:10ms}
+                   b,     latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
 
 # Virtualize a virtual sstable.
@@ -764,12 +764,12 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 4  as flushable: 2 (1.7KB in 3 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
-   pebble-compaction, non-latency: {BlockBytes:677 BlockBytesInCache:376 BlockReadDuration:70ms}
-       pebble-ingest,     latency: {BlockBytes:272 BlockBytesInCache:72 BlockReadDuration:30ms}
+   pebble-compaction, non-latency: {BlockBytes:677 BlockBytesInCache:659 BlockReadDuration:20ms}
+       pebble-ingest,     latency: {BlockBytes:272 BlockBytesInCache:272 BlockReadDuration:0s}
                    a, non-latency: {BlockBytes:0 BlockBytesInCache:0 BlockReadDuration:0s}
-                   b,     latency: {BlockBytes:44 BlockBytesInCache:0 BlockReadDuration:10ms}
+                   b,     latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
                    c, non-latency: {BlockBytes:44 BlockBytesInCache:44 BlockReadDuration:0s}
 
 # Create a DB where lower levels are written as shared tables. All ingests also
@@ -820,7 +820,7 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 
 compact a-z
 ----
@@ -859,7 +859,7 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 
 build ext1.sst
 set b 2
@@ -907,7 +907,7 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 1  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
        pebble-ingest,     latency: {BlockBytes:59 BlockBytesInCache:0 BlockReadDuration:10ms}
 
@@ -956,7 +956,7 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 1  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
        pebble-ingest,     latency: {BlockBytes:59 BlockBytesInCache:0 BlockReadDuration:10ms}
 
@@ -996,7 +996,7 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 
 compact a-z
 ----
@@ -1035,6 +1035,6 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 0  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 Iter category stats:
    pebble-compaction, non-latency: {BlockBytes:147 BlockBytesInCache:0 BlockReadDuration:30ms}

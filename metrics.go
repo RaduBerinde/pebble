@@ -641,15 +641,23 @@ func (m *Metrics) SafeFormat(w redact.SafePrinter, _ rune) {
 	}
 	w.Print("\n")
 
-	formatCacheMetrics := func(m *CacheMetrics, name redact.SafeString) {
-		w.Printf("%s: %s entries (%s)  hit rate: %.1f%%\n",
-			name,
-			humanize.Count.Int64(m.Count),
-			humanize.Bytes.Int64(m.Size),
-			redact.Safe(hitRate(m.Hits, m.Misses)))
+	if m.BlockCache.RecentBlockHits > 0 {
+		w.Printf("Block cache: %s entries (%s)  hit rate: %.1f%% (%.1f%% recent blocks)\n",
+			humanize.Count.Int64(m.BlockCache.Count),
+			humanize.Bytes.Int64(m.BlockCache.Size),
+			redact.Safe(hitRate(m.BlockCache.Hits, m.BlockCache.Misses)),
+			redact.Safe(percent(m.BlockCache.RecentBlockHits, m.BlockCache.Hits+m.BlockCache.Misses)))
+	} else {
+		w.Printf("Block cache: %s entries (%s)  hit rate: %.1f%%\n",
+			humanize.Count.Int64(m.BlockCache.Count),
+			humanize.Bytes.Int64(m.BlockCache.Size),
+			redact.Safe(hitRate(m.BlockCache.Hits, m.BlockCache.Misses)))
 	}
-	formatCacheMetrics(&m.BlockCache, "Block cache")
-	formatCacheMetrics(&m.FileCache, "Table cache")
+
+	w.Printf("Table cache: %s entries (%s)  hit rate: %.1f%%\n",
+		humanize.Count.Int64(m.FileCache.Count),
+		humanize.Bytes.Int64(m.FileCache.Size),
+		redact.Safe(hitRate(m.FileCache.Hits, m.FileCache.Misses)))
 
 	formatSharedCacheMetrics := func(w redact.SafePrinter, m *SecondaryCacheMetrics, name redact.SafeString) {
 		w.Printf("%s: %s entries (%s)  hit rate: %.1f%%\n",
@@ -679,10 +687,11 @@ func (m *Metrics) SafeFormat(w redact.SafePrinter, _ rune) {
 	inUse := func(purpose manual.Purpose) uint64 {
 		return m.manualMemory[purpose].InUseBytes
 	}
-	w.Printf("Cgo memory usage: %s  block cache: %s (data: %s, maps: %s, entries: %s)  memtables: %s\n",
+	w.Printf("Cgo memory usage: %s  block cache: %s (data: %s, recently-written: %s, maps: %s, entries: %s)  memtables: %s\n",
 		humanize.Bytes.Uint64(inUseTotal),
-		humanize.Bytes.Uint64(inUse(manual.BlockCacheData)+inUse(manual.BlockCacheMap)+inUse(manual.BlockCacheEntry)),
+		humanize.Bytes.Uint64(inUse(manual.BlockCacheData)+inUse(manual.BlockCacheRecentlyWritten)+inUse(manual.BlockCacheMap)+inUse(manual.BlockCacheEntry)),
 		humanize.Bytes.Uint64(inUse(manual.BlockCacheData)),
+		humanize.Bytes.Uint64(inUse(manual.BlockCacheRecentlyWritten)),
 		humanize.Bytes.Uint64(inUse(manual.BlockCacheMap)),
 		humanize.Bytes.Uint64(inUse(manual.BlockCacheEntry)),
 		humanize.Bytes.Uint64(inUse(manual.MemTable)),

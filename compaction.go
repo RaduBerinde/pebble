@@ -18,6 +18,7 @@ import (
 	"github.com/cockroachdb/crlib/crtime"
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
+	"github.com/cockroachdb/pebble/internal/cache"
 	"github.com/cockroachdb/pebble/internal/compact"
 	"github.com/cockroachdb/pebble/internal/keyspan"
 	"github.com/cockroachdb/pebble/internal/keyspan/keyspanimpl"
@@ -2950,13 +2951,15 @@ func (d *DB) compactAndWrite(
 		IteratorStats:              &c.stats,
 	}
 	runner := compact.NewRunner(runnerCfg, iter)
+	rbc := cache.NewRecentBlocksCollector(d.opts.Cache)
+	defer rbc.Finish()
 	for runner.MoreDataToWrite() {
 		if c.cancel.Load() {
 			return runner.Finish().WithError(ErrCancelledCompaction)
 		}
 		// Create a new table.
 		writerOpts := d.opts.MakeWriterOptions(c.outputLevel.level, tableFormat)
-		objMeta, tw, cpuWorkHandle, err := d.newCompactionOutput(jobID, c, writerOpts)
+		objMeta, tw, cpuWorkHandle, err := d.newCompactionOutput(jobID, c, writerOpts, rbc)
 		if err != nil {
 			return runner.Finish().WithError(err)
 		}
@@ -3083,7 +3086,10 @@ func (c *compaction) makeVersionEdit(result compact.Result) (*versionEdit, error
 // newCompactionOutput creates an object for a new table produced by a
 // compaction or flush.
 func (d *DB) newCompactionOutput(
-	jobID JobID, c *compaction, writerOpts sstable.WriterOptions,
+	jobID JobID,
+	c *compaction,
+	writerOpts sstable.WriterOptions,
+	recentBlocksCollector *cache.RecentBlocksCollector,
 ) (objstorage.ObjectMetadata, sstable.RawWriter, CPUWorkHandle, error) {
 	diskFileNum := d.mu.versions.getNextDiskFileNum()
 
@@ -3146,6 +3152,7 @@ func (d *DB) newCompactionOutput(
 			CacheID: d.cacheID,
 			FileNum: diskFileNum,
 		},
+		RecentBlocksCollector: recentBlocksCollector,
 	})
 
 	const MaxFileWriteAdditionalCPUTime = time.Millisecond * 100
