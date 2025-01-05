@@ -548,6 +548,28 @@ func (r *Reader) readBlockInternal(
 		return block.CacheBufferHandle(cv), nil
 	}
 
+	// Check the recent blocks cache.
+	cv = r.cacheOpts.Cache.GetRecentBlock(r.cacheOpts.CacheID, r.cacheOpts.FileNum, bh.Offset, block.MetadataSize)
+	if cv != nil {
+		bufHandle := block.CacheBufferHandle(cv)
+		if err := initBlockMetadataFn(bufHandle.BlockMetadata(), bufHandle.BlockData()); err != nil {
+			if crh.Valid() {
+				crh.SetReadError(err)
+			}
+			cv.Release()
+			return block.BufferHandle{}, err
+		}
+		if readHandle != nil {
+			readHandle.RecordCacheHit(ctx, int64(bh.Offset), int64(bh.Length+block.TrailerLen))
+		}
+		env.BlockServedFromCache(bh.Length)
+		if crh.Valid() {
+			crh.SetReadValue(cv)
+		}
+		// We don't put the block in the cache if we are doing a compaction.
+		return bufHandle, nil
+	}
+
 	// Need to read. First acquire loadBlockSema, if needed.
 	if sema := r.loadBlockSema; sema != nil {
 		if err := sema.Acquire(ctx, 1); err != nil {

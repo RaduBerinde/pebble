@@ -18,6 +18,8 @@ import (
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/binfmt"
 	"github.com/cockroachdb/pebble/internal/bytealloc"
+	"github.com/cockroachdb/pebble/internal/cache"
+	"github.com/cockroachdb/pebble/internal/manual"
 	"github.com/cockroachdb/pebble/internal/sstableinternal"
 	"github.com/cockroachdb/pebble/internal/treeprinter"
 	"github.com/cockroachdb/pebble/objstorage"
@@ -627,6 +629,11 @@ type layoutWriter struct {
 	// providing a defense in depth against bugs which cause cache collisions.
 	cacheOpts sstableinternal.CacheOptions
 
+	// RecentBlocksCollector is optionally set to collect recently written blocks
+	// into the recent blocks cache. The layoutWriter calls Add on the collector
+	// for each written block. The writer does NOT call Finish.
+	recentBlocksCollector *cache.RecentBlocksCollector
+
 	// options copied from WriterOptions
 	tableFormat  TableFormat
 	compression  block.Compression
@@ -648,11 +655,12 @@ type layoutWriter struct {
 
 func makeLayoutWriter(w objstorage.Writable, opts WriterOptions) layoutWriter {
 	return layoutWriter{
-		writable:     w,
-		cacheOpts:    opts.internal.CacheOpts,
-		tableFormat:  opts.TableFormat,
-		compression:  opts.Compression,
-		checksumType: opts.Checksum,
+		writable:              w,
+		cacheOpts:             opts.internal.CacheOpts,
+		recentBlocksCollector: opts.internal.RecentBlocksCollector,
+		tableFormat:           opts.TableFormat,
+		compression:           opts.Compression,
+		checksumType:          opts.Checksum,
 		buf: blockBuf{
 			checksummer: block.Checksummer{Type: opts.Checksum},
 		},
@@ -681,8 +689,24 @@ func (w *layoutWriter) WriteDataBlock(b []byte, buf *blockBuf) (block.Handle, er
 
 // WritePrecompressedDataBlock writes a pre-compressed data block and its
 // pre-computed trailer to the writer, returning it's block handle.
+//
+// Note that such blocks must be reported separately via ReportWrittenBlock.
 func (w *layoutWriter) WritePrecompressedDataBlock(blk block.PhysicalBlock) (block.Handle, error) {
 	return w.writePrecompressedBlock(blk)
+}
+
+// ReportWrittenBlock reports an uncompressed block to be potentially copied to
+// the recent blocks cache. It should be explicitly called only for
+// pre-compressed data blocks that are passed to WritePrecompressedDataBlock; it
+// is called automatically by the layoutWriter for other blocks.
+func (w *layoutWriter) ReportWrittenBlock(offset uint64, uncompressed []byte) {
+	if rbc := w.recentBlocksCollector; rbc != nil {
+		// Make a copy to populate the recent blocks cache.
+		// TODO(radu): we should serialize the block directly into such a buffer.
+		buf := manual.New(manual.BlockCacheRecentlyWritten, uintptr(len(uncompressed)))
+		copy(buf.Slice(), uncompressed)
+		rbc.Add(w.cacheOpts.CacheID, w.cacheOpts.FileNum, offset, buf)
+	}
 }
 
 // WriteIndexBlock constructs a trailer for the provided index (first or
@@ -759,8 +783,13 @@ func (w *layoutWriter) WriteValueIndexBlock(
 func (w *layoutWriter) writeBlock(
 	b []byte, compression block.Compression, buf *blockBuf,
 ) (block.Handle, error) {
-	return w.writePrecompressedBlock(block.CompressAndChecksum(
-		&buf.dataBuf, b, compression, &buf.checksummer))
+	w.ReportWrittenBlock(w.offset, b)
+	pb := block.CompressAndChecksum(&buf.dataBuf, b, compression, &buf.checksummer)
+	h, err := w.writePrecompressedBlock(pb)
+	if err != nil {
+		return block.Handle{}, err
+	}
+	return h, nil
 }
 
 // writePrecompressedBlock writes a pre-compressed block and its

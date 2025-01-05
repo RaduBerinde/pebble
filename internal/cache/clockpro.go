@@ -80,8 +80,14 @@ func (k key) String() string {
 }
 
 type shard struct {
-	hits   atomic.Int64
+	// hits is the number of times a block was already in the clockpro cache.
+	hits atomic.Int64
+	// misses is the number of times a block was not already in the clockpro cache.
 	misses atomic.Int64
+	// recentBlockHits is the number of times a block that was not in the clockpro
+	// cache was found in the recent blocks cache. Note that this also counts as a
+	// miss for the counter above.
+	recentBlockHits atomic.Int64
 
 	mu sync.RWMutex
 
@@ -118,9 +124,12 @@ type shard struct {
 	// Some fields in readShard are protected by mu. See comments in declaration
 	// of readShard.
 	readShard readShard
+
+	// recentBlocks is protected by mu.
+	recentBlocks recentBlocks
 }
 
-func (c *shard) init(maxSize int64) {
+func (c *shard) init(maxSize int64, recentBlocksSize int64) {
 	*c = shard{
 		maxSize:    maxSize,
 		coldTarget: maxSize,
@@ -131,6 +140,7 @@ func (c *shard) init(maxSize int64) {
 	c.blocks.Init(16)
 	c.files.Init(16)
 	c.readShard.Init(c)
+	c.recentBlocks.Init(recentBlocksSize)
 }
 
 // getWithMaybeReadEntry is the internal helper for implementing
@@ -250,6 +260,24 @@ func (c *shard) set(k key, value *Value) {
 	c.checkConsistency()
 }
 
+// getRecentBlock attempts to obtain a block from the recent blocks cache. If
+// the block is found, creates a Value large enough to fit the given metadata
+// size followed by the block data and copies the block data at the end of that buffer.
+// It is up to the caller to initialize the metadata.
+func (c *shard) getRecentBlock(k key, metadataSize int) *Value {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	buf := c.recentBlocks.Lookup(k)
+	if buf.Data() == nil {
+		return nil
+	}
+	v := newValue(metadataSize + int(buf.Len()))
+	copy(v.RawBuffer()[metadataSize:], buf.Slice())
+	c.recentBlockHits.Add(1)
+	return v
+}
+
 func (c *shard) checkConsistency() {
 	// See the comment above the count{Hot,Cold,Test} fields.
 	switch {
@@ -361,6 +389,7 @@ func (c *shard) Free() {
 
 	c.blocks.Close()
 	c.files.Close()
+	c.recentBlocks.Free()
 }
 
 func (c *shard) Reserve(n int) {
@@ -665,6 +694,9 @@ type Metrics struct {
 	Count int64
 	// The number of cache hits.
 	Hits int64
+	// RecentBlockHits is the subset of hits that were served from the recent
+	// block cache (as opposed to the main clockpro cache).
+	RecentBlockHits int64
 	// The number of cache misses.
 	Misses int64
 }
@@ -711,10 +743,10 @@ type Metrics struct {
 // used in combination by specifying `-tags invariants,tracing`. Note that
 // "tracing" produces a significant slowdown, while "invariants" does not.
 type Cache struct {
-	refs    atomic.Int64
-	maxSize int64
-	idAlloc atomic.Uint64
-	shards  []shard
+	refs      atomic.Int64
+	totalSize int64
+	idAlloc   atomic.Uint64
+	shards    []shard
 
 	// Traces recorded by Cache.trace. Used for debugging.
 	tr struct {
@@ -727,6 +759,12 @@ type Cache struct {
 // among multiple Pebble instances. NewID can be used to generate a new ID that
 // is unique in the context of this cache.
 type ID uint64
+
+type Options struct {
+	Size             int64
+	RecentBlocksSize int64
+	NumShards        int
+}
 
 // New creates a new cache of the specified size. Memory for the cache is
 // allocated on demand, not during initialization. The cache is created with a
@@ -762,19 +800,23 @@ func New(size int64) *Cache {
 	if m > 4 && int(size)/m < minimumShardSize {
 		m = 4
 	}
-	return newShards(size, m)
+	// TODO(radu): make this configurable.
+	const recentBlocksPercent = 5
+	return newInternal(size, recentBlocksPercent, m)
 }
 
-func newShards(size int64, shards int) *Cache {
+func newInternal(totalSize int64, recentBlocksPercent int, numShards int) *Cache {
 	c := &Cache{
-		maxSize: size,
-		shards:  make([]shard, shards),
+		totalSize: totalSize,
+		shards:    make([]shard, numShards),
 	}
 	c.refs.Store(1)
 	c.idAlloc.Store(1)
 	c.trace("alloc", c.refs.Load())
+	shardMaxSize := totalSize * (100 - int64(recentBlocksPercent)) / (100 * int64(numShards))
+	shardRecentBlocksSize := totalSize * int64(recentBlocksPercent) / (100 * int64(numShards))
 	for i := range c.shards {
-		c.shards[i].init(size / int64(len(c.shards)))
+		c.shards[i].init(shardMaxSize, shardRecentBlocksSize)
 	}
 
 	// Note: this is a no-op if invariants are disabled or race is enabled.
@@ -870,6 +912,17 @@ func (c *Cache) GetWithReadHandle(
 	return nil, ReadHandle{entry: re}, errorDuration, false, nil
 }
 
+// GetRecentBlock attempts to obtain a block from the recent blocks cache. If
+// the block is found, creates a Value large enough to fit the given metadata
+// size followed by the block data and copies the block data at the end of that buffer.
+// It is up to the caller to initialize the metadata.
+func (c *Cache) GetRecentBlock(
+	id ID, fileNum base.DiskFileNum, offset uint64, metadataSize int,
+) *Value {
+	k := makeKey(id, fileNum, offset)
+	return c.getShard(k).getRecentBlock(k, metadataSize)
+}
+
 // Set sets the cache value for the specified file and offset, overwriting an
 // existing value if present. The value must have been allocated by Cache.Alloc.
 //
@@ -897,7 +950,7 @@ func (c *Cache) EvictFile(id ID, fileNum base.DiskFileNum) {
 
 // MaxSize returns the max size of the cache.
 func (c *Cache) MaxSize() int64 {
-	return c.maxSize
+	return c.totalSize
 }
 
 // Size returns the current space used by the cache.
@@ -958,8 +1011,10 @@ func (c *Cache) Metrics() Metrics {
 		m.Count += int64(s.blocks.Len())
 		m.Size += s.sizeHot + s.sizeCold
 		s.mu.RUnlock()
-		m.Hits += s.hits.Load()
-		m.Misses += s.misses.Load()
+		recentBlockHits := s.recentBlockHits.Load()
+		m.Hits += s.hits.Load() + recentBlockHits
+		m.RecentBlockHits += recentBlockHits
+		m.Misses += s.misses.Load() - recentBlockHits
 	}
 	return m
 }

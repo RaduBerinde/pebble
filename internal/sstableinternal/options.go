@@ -25,10 +25,15 @@ type ReaderOptions struct {
 	CacheOpts CacheOptions
 }
 
-// WriterOptions are fields of sstable.ReaderOptions that can only be set from
+// WriterOptions are fields of sstable.WriterOptions that can only be set from
 // within the pebble package.
 type WriterOptions struct {
 	CacheOpts CacheOptions
+
+	// RecentBlocksCollector is optionally set to collect recently written blocks
+	// into the recent blocks cache. The writer calls Add on the collector for
+	// each block. The writer does NOT call Finish.
+	RecentBlocksCollector *cache.RecentBlocksCollector
 
 	// DisableKeyOrderChecks disables the checks that keys are added to an sstable
 	// in order. It is intended for use only in the construction of invalid

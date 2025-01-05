@@ -50,6 +50,7 @@ const (
 	BlockCacheMap
 	BlockCacheEntry
 	BlockCacheData
+	BlockCacheRecentlyWritten
 	MemTable
 
 	NumPurposes

@@ -114,18 +114,10 @@ remove: db/MANIFEST-000001
 [JOB 6] compacting(default) L0 [000005 000008] (1.4KB) Score=0.00 + L6 [] (0B) Score=0.00; OverlappingRatio: Single 0.00, Multi 0.00
 open: db/000005.sst (options: *vfs.randomReadsOption)
 read-at(673, 53): db/000005.sst
-read-at(636, 37): db/000005.sst
-read-at(119, 517): db/000005.sst
 open: db/000008.sst (options: *vfs.randomReadsOption)
 read-at(673, 53): db/000008.sst
-read-at(636, 37): db/000008.sst
-read-at(119, 517): db/000008.sst
-read-at(78, 41): db/000005.sst
 open: db/000005.sst (options: *vfs.sequentialReadsOption)
-read-at(0, 78): db/000005.sst
-read-at(78, 41): db/000008.sst
 open: db/000008.sst (options: *vfs.sequentialReadsOption)
-read-at(0, 78): db/000008.sst
 close: db/000008.sst
 close: db/000005.sst
 create: db/000010.sst
@@ -239,7 +231,7 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 1  as flushable: 0 (0B in 0 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 
 # Set up a scenario where the table to be ingested overlaps with the memtable.
 # The table is ingested as a flushable. The flush metrics refect the flushed
@@ -341,7 +333,7 @@ Snapshots: 0  earliest seq num: 0
 Table iters: 0
 Filter utility: 0.0%
 Ingestions: 2  as flushable: 1 (1.4KB in 2 tables)
-Cgo memory usage: 0B  block cache: 0B (data: 0B, maps: 0B, entries: 0B)  memtables: 0B
+Cgo memory usage: 0B  block cache: 0B (data: 0B, recently-written: 0B, maps: 0B, entries: 0B)  memtables: 0B
 
 sstables
 ----

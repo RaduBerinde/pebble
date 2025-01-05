@@ -119,7 +119,7 @@ func TestReadShard(t *testing.T) {
 				var maxSize int64
 				td.ScanArgs(t, "max-size", &maxSize)
 				c = &shard{}
-				c.init(maxSize)
+				c.init(maxSize, 0)
 				if len(readers) > 0 {
 					t.Fatalf("have %d readers that have not completed", len(readers))
 				}
