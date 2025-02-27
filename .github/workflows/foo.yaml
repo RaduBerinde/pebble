@@ -1,0 +1,32 @@
+name: s390x
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  one:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Setup multiarch/qemu-user-static
+        run: |
+          docker run --rm --privileged multiarch/qemu-user-static:register --reset
+      - name: ubuntu-core:s390x-focal
+        shell: bash
+        run: |
+          docker run --rm --privileged \
+            -v "${{ github.workspace }}:/pebble" \
+            multiarch/ubuntu-core:s390x-focal \
+            bash -c \
+                "uname -a &&
+                lscpu | grep Endian &&
+                apt-get update &&
+                apt-get install -y wget &&
+                wget https://go.dev/dl/go1.23.6.linux-s390x.tar.gz &&
+                tar xzvf go1.23.6.linux-s390x.tar.gz -C /usr/local &&
+                export PATH="$PATH:/usr/local/go/bin" &&
+                cd /pebble &&
+                go test -tags invariants ./...
+                "
