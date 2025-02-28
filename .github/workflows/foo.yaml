@@ -1,0 +1,43 @@
+name: Foo
+
+on:
+  push:
+    branches: [ "big-endian" ]
+  workflow_dispatch:
+
+jobs:
+  linux-qemu-s390x:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install qemu
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static
+          qemu-s390x-static --version
+
+      - name: ubuntu-core:s390x-focal
+        shell: bash
+        run: |
+          docker run --rm --privileged \
+            -v "${{ github.workspace }}:/pebble" \
+            multiarch/ubuntu-core:s390x-focal \
+            bash -c "
+                uname -a &&
+                lscpu | grep Endian &&
+                apt-get update &&
+                apt-get install -y wget &&
+                wget -q https://go.dev/dl/go1.24.0.linux-s390x.tar.gz &&
+                tar xzf go1.24.0.linux-s390x.tar.gz -C /usr/local &&
+                export PATH="$PATH:/usr/local/go/bin" &&
+                cd /pebble &&
+                go version &&
+                go env &&
+                go test -v -tags invariants -gcflags="all=-d=checkptr" -run TestUint ./sstable/colblk &&
+                go test -v -tags invariants -gcflags="all=-d=checkptr" ./sstable/colblk &&
+                go test -v -tags invariants ./cockroachkvs &&
+                go test -tags invariants ./... &&
+                go test ./...
+            "
