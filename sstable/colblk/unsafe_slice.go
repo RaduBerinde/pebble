@@ -6,9 +6,11 @@ package colblk
 
 import (
 	"encoding/binary"
+	"math/bits"
 	"unsafe"
 
 	"github.com/cockroachdb/errors"
+	"github.com/cockroachdb/pebble/internal/buildtags"
 	"golang.org/x/exp/constraints"
 )
 
@@ -100,27 +102,37 @@ func makeUnsafeUints(base uint64, ptr unsafe.Pointer, width int) UnsafeUints {
 
 // At returns the `i`-th element.
 func (s UnsafeUints) At(i int) uint64 {
-	// TODO(radu): this implementation assumes little-endian architecture.
-
 	// One of the most common case is decoding timestamps, which require the full
 	// 8 bytes (2^32 nanoseconds is only ~4 seconds).
 	if s.width == 8 {
 		// NB: The slice encodes 64-bit integers, there is no base (it doesn't save
 		// any bits to compute a delta). We cast directly into a *uint64 pointer and
 		// don't add the base.
-		return *(*uint64)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i)<<align64Shift))
+		value := *(*uint64)(unsafe.Add(s.ptr, uintptr(i)<<align64Shift))
+		if buildtags.BigEndian {
+			value = bits.ReverseBytes64(value)
+		}
+		return value
 	}
 	// Another common case is 0 width, when all keys have zero logical timestamps.
 	if s.width == 0 {
 		return s.base
 	}
 	if s.width == 4 {
-		return s.base + uint64(*(*uint32)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i)<<align32Shift)))
+		value := *(*uint32)(unsafe.Add(s.ptr, uintptr(i)<<align32Shift))
+		if buildtags.BigEndian {
+			value = bits.ReverseBytes32(value)
+		}
+		return s.base + uint64(value)
 	}
 	if s.width == 2 {
-		return s.base + uint64(*(*uint16)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i)<<align16Shift)))
+		value := *(*uint16)(unsafe.Add(s.ptr, uintptr(i)<<align16Shift))
+		if buildtags.BigEndian {
+			value = bits.ReverseBytes16(value)
+		}
+		return s.base + uint64(value)
 	}
-	return s.base + uint64(*(*uint8)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i))))
+	return s.base + uint64(*(*uint8)(unsafe.Add(s.ptr, uintptr(i))))
 }
 
 // UnsafeOffsets is a specialization of UnsafeInts (providing the same
@@ -149,39 +161,54 @@ func DecodeUnsafeOffsets(b []byte, off uint32, rows int) (_ UnsafeOffsets, endOf
 //
 //gcassert:inline
 func (s UnsafeOffsets) At(i int) uint32 {
-	// TODO(radu): this implementation assumes little-endian architecture.
-
 	// We expect offsets to be encoded as 16-bit integers in most cases.
 	if s.width == 2 {
-		return uint32(*(*uint16)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i)<<align16Shift)))
+		value := *(*uint16)(unsafe.Add(s.ptr, uintptr(i)<<align16Shift))
+		if buildtags.BigEndian {
+			value = bits.ReverseBytes16(value)
+		}
+		return uint32(value)
 	}
 	if s.width <= 1 {
 		if s.width == 0 {
 			return 0
 		}
-		return uint32(*(*uint8)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i))))
+		return uint32(*(*uint8)(unsafe.Add(s.ptr, i)))
 	}
-	return *(*uint32)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i)<<align32Shift))
+	value := *(*uint32)(unsafe.Add(s.ptr, uintptr(i)<<align32Shift))
+	if buildtags.BigEndian {
+		value = bits.ReverseBytes32(value)
+	}
+	return *(*uint32)(unsafe.Add(s.ptr, uintptr(i)<<align32Shift))
 }
 
 // At2 returns the `i`-th and `i+1`-th offsets.
 //
 //gcassert:inline
 func (s UnsafeOffsets) At2(i int) (uint32, uint32) {
-	// TODO(radu): this implementation assumes little-endian architecture.
-
 	// We expect offsets to be encoded as 16-bit integers in most cases.
 	if s.width == 2 {
-		v := *(*uint32)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i)<<align16Shift))
+		v := *(*uint32)(unsafe.Add(s.ptr, uintptr(i)<<align16Shift))
+		if buildtags.BigEndian {
+			v = bits.ReverseBytes32(v)
+			return v >> 16, v & 0xFFFF
+		}
 		return v & 0xFFFF, v >> 16
 	}
 	if s.width <= 1 {
 		if s.width == 0 {
 			return 0, 0
 		}
-		v := *(*uint16)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i)))
+		v := *(*uint16)(unsafe.Add(s.ptr, uintptr(i)))
+		if buildtags.BigEndian {
+			return uint32(v >> 8), uint32(v & 0xFF)
+		}
 		return uint32(v & 0xFF), uint32(v >> 8)
 	}
-	v := *(*uint64)(unsafe.Pointer(uintptr(s.ptr) + uintptr(i)<<align32Shift))
+	v := *(*uint64)(unsafe.Add(s.ptr, uintptr(i)<<align32Shift))
+	if buildtags.BigEndian {
+		v = bits.ReverseBytes64(v)
+		return uint32(v >> 32), uint32(v)
+	}
 	return uint32(v), uint32(v >> 32)
 }

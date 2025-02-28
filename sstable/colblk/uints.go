@@ -14,6 +14,7 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/binfmt"
+	"github.com/cockroachdb/pebble/internal/buildtags"
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/internal/treeprinter"
 	"golang.org/x/exp/constraints"
@@ -414,10 +415,20 @@ func uintColumnFinish(
 	case 2:
 		dest := makeUnsafeRawSlice[uint16](unsafe.Pointer(&buf[offset])).Slice(rows)
 		reduceUints(deltaBase, values, dest)
+		if buildtags.BigEndian {
+			for i := range dest {
+				dest[i] = bits.Reverse16(dest[i])
+			}
+		}
 
 	case 4:
 		dest := makeUnsafeRawSlice[uint32](unsafe.Pointer(&buf[offset])).Slice(rows)
 		reduceUints(deltaBase, values, dest)
+		if buildtags.BigEndian {
+			for i := range dest {
+				dest[i] = bits.Reverse32(dest[i])
+			}
+		}
 
 	case 8:
 		if deltaBase != 0 {
@@ -425,6 +436,11 @@ func uintColumnFinish(
 		}
 		dest := makeUnsafeRawSlice[uint64](unsafe.Pointer(&buf[offset])).Slice(rows)
 		copy(dest, values)
+		if buildtags.BigEndian {
+			for i := range dest {
+				dest[i] = bits.Reverse64(dest[i])
+			}
+		}
 
 	default:
 		panic("unreachable")
