@@ -36,15 +36,15 @@ func TestUnsafeUints(t *testing.T) {
 
 					uints, _ := DecodeUnsafeUints(buf, 0, rows)
 					for i := range rows {
-						if uints.At(i) != vals[i] {
-							t.Fatalf("mismatch at row %d: got %d, expected %d", i, uints.At(i), vals[i])
+						if v := uints.At(i); v != vals[i] {
+							t.Fatalf("mismatch at row %d: got %d, expected %d", i, v, vals[i])
 						}
 					}
 					if encoding := UintEncoding(buf[0]); encoding.Width() <= 4 && !encoding.IsDelta() {
 						offsets, _ := DecodeUnsafeOffsets(buf, 0, rows)
 						for i := range rows {
-							if uint64(offsets.At(i)) != vals[i] {
-								t.Fatalf("mismatch at row %d: got %d, expected %d", i, uints.At(i), vals[i])
+							if v := uint64(offsets.At(i)); v != vals[i] {
+								t.Fatalf("mismatch at row %d: got %d, expected %d", i, v, vals[i])
 							}
 						}
 						for i := 0; i < rows-1; i++ {
