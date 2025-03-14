@@ -1,0 +1,55 @@
+add
+L1 [b, c) 10m
+----
+L1:
+  [b, c) expiration: 10m
+
+# Positive overlap tests.
+overlap
+L1 [a, b] 5m
+L1 [a, bb) 5m
+L1 [a, bb] 5m
+L1 [b, b] 5m
+L1 [a, z) 5m
+L1 [b1, b2) 5m
+L1 [b5, d) 5m
+----
+L1 [a, b]: overlap
+L1 [a, bb): overlap
+L1 [a, bb]: overlap
+L1 [b, b]: overlap
+L1 [a, z): overlap
+L1 [b1, b2): overlap
+L1 [b5, d): overlap
+L1:
+  [b, c) expiration: 10m
+
+# Negative overlap tests.
+overlap
+L1 [a, b) 5m
+L1 [c, d] 5m
+L1 [u, v) 5m
+----
+L1 [a, b): no overlap
+L1 [c, d]: no overlap
+L1 [u, v): no overlap
+L1:
+  [b, c) expiration: 10m
+
+add
+L2 [b, e) 10m
+----
+L1:
+  [b, c) expiration: 10m
+L2:
+  [b, e) expiration: 10m
+
+add
+L2 [c, d) 20m
+----
+L1:
+  [b, c) expiration: 10m
+L2:
+  [b, c) expiration: 10m
+  [c, d) expiration: 20m
+  [d, e) expiration: 10m
