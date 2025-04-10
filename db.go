@@ -2056,12 +2056,12 @@ func (d *DB) Metrics() *Metrics {
 	metrics.Keys.RangeKeySetsCount = *rangeKeySetsAnnotator.MultiLevelAnnotation(vers.RangeKeyLevels[:])
 	metrics.Keys.TombstoneCount = *tombstonesAnnotator.MultiLevelAnnotation(vers.Levels[:])
 
-	d.mu.versions.logLock()
-	metrics.private.manifestFileSize = uint64(d.mu.versions.manifest.Size())
-	backingCount, backingTotalSize := d.mu.versions.virtualBackings.Stats()
-	metrics.Table.BackingTableCount = uint64(backingCount)
-	metrics.Table.BackingTableSize = backingTotalSize
-	d.mu.versions.logUnlock()
+	d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+		metrics.private.manifestFileSize = uint64(d.mu.versions.manifest.Size())
+		backingCount, backingTotalSize := d.mu.versions.virtualBackings.Stats()
+		metrics.Table.BackingTableCount = uint64(backingCount)
+		metrics.Table.BackingTableSize = backingTotalSize
+	})
 
 	metrics.LogWriter.FsyncLatency = d.mu.log.metrics.fsyncLatency
 	if err := metrics.LogWriter.Merge(&d.mu.log.metrics.LogWriterMetrics); err != nil {

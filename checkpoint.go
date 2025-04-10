@@ -15,6 +15,7 @@ import (
 	"github.com/cockroachdb/pebble/record"
 	"github.com/cockroachdb/pebble/vfs"
 	"github.com/cockroachdb/pebble/vfs/atomicfs"
+	"github.com/cockroachdb/pebble/wal"
 )
 
 // checkpointOptions hold the optional parameters to construct checkpoint
@@ -184,27 +185,32 @@ func (d *DB) Checkpoint(
 	// length of the manifest that we read to match the current version that
 	// we read, otherwise we might copy a versionEdit not reflected in the
 	// sstables we copy/link.
-	d.mu.versions.logLock()
-	// Get the the current version and the current manifest file number.
-	current := d.mu.versions.currentVersion()
-	formatVers := d.FormatMajorVersion()
-	manifestFileNum := d.mu.versions.manifestFileNum
-	manifestSize := d.mu.versions.manifest.Size()
-	optionsFileNum := d.optionsFileNum
-
+	var current *version
+	var formatVers FormatMajorVersion
+	var manifestFileNum base.DiskFileNum
+	var manifestSize int64
+	var optionsFileNum base.DiskFileNum
+	var allLogicalLogs wal.Logs
 	virtualBackingFiles := make(map[base.DiskFileNum]struct{})
-	d.mu.versions.virtualBackings.ForEach(func(backing *fileBacking) {
-		virtualBackingFiles[backing.DiskFileNum] = struct{}{}
+	d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+		// Get the the current version and the current manifest file number.
+		current = d.mu.versions.currentVersion()
+		formatVers = d.FormatMajorVersion()
+		manifestFileNum = d.mu.versions.manifestFileNum
+		manifestSize = d.mu.versions.manifest.Size()
+		optionsFileNum = d.optionsFileNum
+
+		d.mu.versions.virtualBackings.ForEach(func(backing *fileBacking) {
+			virtualBackingFiles[backing.DiskFileNum] = struct{}{}
+		})
+
+		// Acquire the logs while holding mutexes to ensure we don't race with a
+		// flush that might mark a log that's relevant to `current` as obsolete
+		// before our call to List.
+		allLogicalLogs = d.mu.log.manager.List()
 	})
 
-	// Acquire the logs while holding mutexes to ensure we don't race with a
-	// flush that might mark a log that's relevant to `current` as obsolete
-	// before our call to List.
-	allLogicalLogs := d.mu.log.manager.List()
-
-	// Release the manifest and DB.mu so we don't block other operations on
-	// the database.
-	d.mu.versions.logUnlock()
+	// Release DB.mu so we don't block other operations on the database.
 	d.mu.Unlock()
 
 	// Wrap the normal filesystem with one which wraps newly created files with

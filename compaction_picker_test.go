@@ -1482,16 +1482,14 @@ func TestCompactionPickerPickFile(t *testing.T) {
 			// level.
 			var lf manifest.LevelFile
 			var ok bool
-			func() {
-				d.mu.versions.logLock()
-				defer d.mu.versions.logUnlock()
+			d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
 				env := d.makeCompactionEnvLocked()
 				if env == nil {
 					return
 				}
 				p := d.mu.versions.picker.(*compactionPickerByScore)
 				lf, ok = pickCompactionSeedFile(p.vers, p.virtualBackings, opts, level, level+1, env.earliestSnapshotSeqNum, problemSpans)
-			}()
+			})
 			if !ok {
 				return "(none)"
 			}

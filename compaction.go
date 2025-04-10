@@ -1096,16 +1096,16 @@ func (d *DB) clearCompactingState(c *compaction, rollback bool) {
 		// L0Sublevels instance, but not added it to the versions list, causing
 		// all the indices in TableMetadata to be inaccurate. To ensure this,
 		// grab the manifest lock.
-		d.mu.versions.logLock()
-		// It is a bit peculiar that we are fiddling with th current version state
-		// in a separate critical section from when this version was installed.
-		// But this fiddling is necessary if the compaction failed. When the
-		// compaction succeeded, we've already done this in UpdateVersionLocked, so
-		// this seems redundant. Anyway, we clear the pickedCompactionCache since we
-		// may be able to pick a better compaction (though when this compaction
-		// succeeded we've also cleared the cache in UpdateVersionLocked).
-		defer d.mu.versions.logUnlockAndInvalidatePickedCompactionCache()
-		d.mu.versions.l0Organizer.InitCompactingFileInfo(l0InProgress)
+		d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+			// It is a bit peculiar that we are fiddling with the current version state
+			// in a separate critical section from when this version was installed.
+			// But this fiddling is necessary if the compaction failed. When the
+			// compaction succeeded, we've already done this in UpdateVersionLocked, so
+			// this seems redundant. Anyway, we clear the pickedCompactionCache since we
+			// may be able to pick a better compaction (though when this compaction
+			// succeeded we've also cleared the cache in UpdateVersionLocked).
+			d.mu.versions.l0Organizer.InitCompactingFileInfo(l0InProgress)
+		})
 	}()
 }
 
@@ -1705,59 +1705,59 @@ func (d *DB) maybeScheduleCompactionAsync() {
 // run using maybeScheduleCompaction, since starting those compactions needs
 // to invalidate the pickedCompactionCache.
 //
-// Requires d.mu to be held.
+// Requires d.mu to be held; d.mu might be dropped and reacquired.
 func (d *DB) maybeScheduleCompaction() {
-	d.mu.versions.logLock()
-	defer d.mu.versions.logUnlock()
-	env := d.makeCompactionEnvLocked()
-	if env == nil {
-		return
-	}
-	// env.inProgressCompactions will become stale once we pick a compaction, so
-	// it needs to be kept fresh. Also, the pickedCompaction in the
-	// pickedCompactionCache is not valid if we pick a compaction before using
-	// it, since those earlier compactions can mark the same file as compacting.
+	d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+		env := d.makeCompactionEnvLocked()
+		if env == nil {
+			return
+		}
+		// env.inProgressCompactions will become stale once we pick a compaction, so
+		// it needs to be kept fresh. Also, the pickedCompaction in the
+		// pickedCompactionCache is not valid if we pick a compaction before using
+		// it, since those earlier compactions can mark the same file as compacting.
 
-	// Delete-only compactions are expected to be cheap and reduce future
-	// compaction work, so schedule them directly instead of using the
-	// CompactionScheduler.
-	if d.tryScheduleDeleteOnlyCompaction() {
-		env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
-		d.mu.versions.pickedCompactionCache.invalidate()
-	}
-	// Download compactions have their own concurrency and do not currently
-	// interact with CompactionScheduler.
-	//
-	// TODO(sumeer): integrate with CompactionScheduler, since these consume
-	// disk write bandwidth.
-	if d.tryScheduleDownloadCompactions(*env, d.opts.MaxConcurrentDownloads()) {
-		env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
-		d.mu.versions.pickedCompactionCache.invalidate()
-	}
-	// The remaining compactions are scheduled by the CompactionScheduler.
-	if d.mu.versions.pickedCompactionCache.isWaiting() {
-		// CompactionScheduler already knows that the DB is waiting to run a
-		// compaction.
-		return
-	}
-	// INVARIANT: !pickedCompactionCache.isWaiting. The following loop will
-	// either exit after successfully starting all the compactions it can pick,
-	// or will exit with one pickedCompaction in the cache, and isWaiting=true.
-	for {
-		// Do not have a pickedCompaction in the cache.
-		pc := d.pickAnyCompaction(*env)
-		if pc == nil {
+		// Delete-only compactions are expected to be cheap and reduce future
+		// compaction work, so schedule them directly instead of using the
+		// CompactionScheduler.
+		if d.tryScheduleDeleteOnlyCompaction() {
+			env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
+			d.mu.versions.pickedCompactionCache.invalidate()
+		}
+		// Download compactions have their own concurrency and do not currently
+		// interact with CompactionScheduler.
+		//
+		// TODO(sumeer): integrate with CompactionScheduler, since these consume
+		// disk write bandwidth.
+		if d.tryScheduleDownloadCompactions(*env, d.opts.MaxConcurrentDownloads()) {
+			env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
+			d.mu.versions.pickedCompactionCache.invalidate()
+		}
+		// The remaining compactions are scheduled by the CompactionScheduler.
+		if d.mu.versions.pickedCompactionCache.isWaiting() {
+			// CompactionScheduler already knows that the DB is waiting to run a
+			// compaction.
 			return
 		}
-		success, grantHandle := d.opts.Experimental.CompactionScheduler.TrySchedule()
-		if !success {
-			// Can't run now, but remember this pickedCompaction in the cache.
-			d.mu.versions.pickedCompactionCache.add(pc)
-			return
+		// INVARIANT: !pickedCompactionCache.isWaiting. The following loop will
+		// either exit after successfully starting all the compactions it can pick,
+		// or will exit with one pickedCompaction in the cache, and isWaiting=true.
+		for {
+			// Do not have a pickedCompaction in the cache.
+			pc := d.pickAnyCompaction(*env)
+			if pc == nil {
+				return
+			}
+			success, grantHandle := d.opts.Experimental.CompactionScheduler.TrySchedule()
+			if !success {
+				// Can't run now, but remember this pickedCompaction in the cache.
+				d.mu.versions.pickedCompactionCache.add(pc)
+				return
+			}
+			d.runPickedCompaction(pc, grantHandle)
+			env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
 		}
-		d.runPickedCompaction(pc, grantHandle)
-		env.inProgressCompactions = d.getInProgressCompactionInfoLocked(nil)
-	}
+	})
 }
 
 // makeCompactionEnv attempts to create a compactionEnv necessary during
@@ -1838,27 +1838,28 @@ func (d *DB) runPickedCompaction(pc *pickedCompaction, grantHandle CompactionGra
 func (d *DB) Schedule(grantHandle CompactionGrantHandle) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.mu.versions.logLock()
-	defer d.mu.versions.logUnlock()
-	isWaiting := d.mu.versions.pickedCompactionCache.isWaiting()
-	if !isWaiting {
-		return false
-	}
-	pc := d.mu.versions.pickedCompactionCache.getForRunning()
-	if pc == nil {
-		env := d.makeCompactionEnvLocked()
-		if env != nil {
-			pc = d.pickAnyCompaction(*env)
+	var ok bool
+	d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+		if !d.mu.versions.pickedCompactionCache.isWaiting() {
+			return
 		}
+		pc := d.mu.versions.pickedCompactionCache.getForRunning()
 		if pc == nil {
-			d.mu.versions.pickedCompactionCache.setNotWaiting()
-			return false
+			env := d.makeCompactionEnvLocked()
+			if env != nil {
+				pc = d.pickAnyCompaction(*env)
+			}
+			if pc == nil {
+				d.mu.versions.pickedCompactionCache.setNotWaiting()
+				return
+			}
 		}
-	}
-	// INVARIANT: pc != nil and is not in the cache. isWaiting is true, since
-	// there may be more compactions to run.
-	d.runPickedCompaction(pc, grantHandle)
-	return true
+		// INVARIANT: pc != nil and is not in the cache. isWaiting is true, since
+		// there may be more compactions to run.
+		d.runPickedCompaction(pc, grantHandle)
+		ok = true
+	})
+	return ok
 }
 
 // GetWaitingCompaction implements DBForCompaction (it is called by the
@@ -1866,30 +1867,33 @@ func (d *DB) Schedule(grantHandle CompactionGrantHandle) bool {
 func (d *DB) GetWaitingCompaction() (bool, WaitingCompaction) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	d.mu.versions.logLock()
-	defer d.mu.versions.logUnlock()
-	isWaiting := d.mu.versions.pickedCompactionCache.isWaiting()
-	if !isWaiting {
-		return false, WaitingCompaction{}
-	}
-	pc := d.mu.versions.pickedCompactionCache.peek()
-	if pc == nil {
-		// Need to pick a compaction.
-		env := d.makeCompactionEnvLocked()
-		if env != nil {
-			pc = d.pickAnyCompaction(*env)
+
+	var ok bool
+	var c WaitingCompaction
+	d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+		if !d.mu.versions.pickedCompactionCache.isWaiting() {
+			return
 		}
+		pc := d.mu.versions.pickedCompactionCache.peek()
 		if pc == nil {
-			// Call setNotWaiting so that next call to GetWaitingCompaction can
-			// return early.
-			d.mu.versions.pickedCompactionCache.setNotWaiting()
-			return false, WaitingCompaction{}
-		} else {
+			// Need to pick a compaction.
+			env := d.makeCompactionEnvLocked()
+			if env != nil {
+				pc = d.pickAnyCompaction(*env)
+			}
+			if pc == nil {
+				// Call setNotWaiting so that next call to GetWaitingCompaction can
+				// return early.
+				d.mu.versions.pickedCompactionCache.setNotWaiting()
+				return
+			}
 			d.mu.versions.pickedCompactionCache.add(pc)
 		}
-	}
-	// INVARIANT: pc != nil and is in the cache.
-	return true, makeWaitingCompaction(pc.manualID > 0, pc.kind, pc.score)
+		// INVARIANT: pc != nil and is in the cache.
+		ok = true
+		c = makeWaitingCompaction(pc.manualID > 0, pc.kind, pc.score)
+	})
+	return ok, c
 }
 
 // GetAllowedWithoutPermission implements DBForCompaction (it is called by the

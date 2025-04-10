@@ -887,23 +887,22 @@ func TestExcise(t *testing.T) {
 			exciseSpan.End = []byte(td.CmdArgs[1].Key)
 
 			d.mu.Lock()
-			d.mu.versions.logLock()
-			d.mu.Unlock()
-			current := d.mu.versions.currentVersion()
+			d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+				d.mu.Unlock()
+				defer d.mu.Lock()
+				current := d.mu.versions.currentVersion()
 
-			for l, ls := range current.AllLevelsAndSublevels() {
-				iter := ls.Iter()
-				for m := iter.SeekGE(d.cmp, exciseSpan.Start); m != nil && d.cmp(m.Smallest.UserKey, exciseSpan.End) < 0; m = iter.Next() {
-					leftTable, rightTable, err := d.exciseTable(context.Background(), exciseSpan.UserKeyBounds(), m, l.Level())
-					if err != nil {
-						td.Fatalf(t, "error when excising %s: %s", m.FileNum, err.Error())
+				for l, ls := range current.AllLevelsAndSublevels() {
+					iter := ls.Iter()
+					for m := iter.SeekGE(d.cmp, exciseSpan.Start); m != nil && d.cmp(m.Smallest.UserKey, exciseSpan.End) < 0; m = iter.Next() {
+						leftTable, rightTable, err := d.exciseTable(context.Background(), exciseSpan.UserKeyBounds(), m, l.Level())
+						if err != nil {
+							td.Fatalf(t, "error when excising %s: %s", m.FileNum, err.Error())
+						}
+						applyExciseToVersionEdit(ve, m, leftTable, rightTable, l.Level())
 					}
-					applyExciseToVersionEdit(ve, m, leftTable, rightTable, l.Level())
 				}
-			}
-
-			d.mu.Lock()
-			d.mu.versions.logUnlock()
+			})
 			d.mu.Unlock()
 			return fmt.Sprintf("would excise %d files, use ingest-and-excise to excise.\n%s", len(ve.DeletedTables), ve.DebugString(base.DefaultFormatter))
 		case "confirm-backing":
@@ -1239,24 +1238,24 @@ func testIngestSharedImpl(
 			exciseSpan.End = []byte(td.CmdArgs[1].Key)
 
 			d.mu.Lock()
-			d.mu.versions.logLock()
-			d.mu.Unlock()
-			current := d.mu.versions.currentVersion()
-			for level := range current.Levels {
-				iter := current.Levels[level].Iter()
-				for m := iter.SeekGE(d.cmp, exciseSpan.Start); m != nil && d.cmp(m.Smallest.UserKey, exciseSpan.End) < 0; m = iter.Next() {
-					leftTable, rightTable, err := d.exciseTable(context.Background(), exciseSpan.UserKeyBounds(), m, level)
-					if err != nil {
-						d.mu.Lock()
-						d.mu.versions.logUnlock()
-						d.mu.Unlock()
-						return fmt.Sprintf("error when excising %s: %s", m.FileNum, err.Error())
+			d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+				d.mu.Unlock()
+				defer d.mu.Lock()
+				current := d.mu.versions.currentVersion()
+				for level := range current.Levels {
+					iter := current.Levels[level].Iter()
+					for m := iter.SeekGE(d.cmp, exciseSpan.Start); m != nil && d.cmp(m.Smallest.UserKey, exciseSpan.End) < 0; m = iter.Next() {
+						leftTable, rightTable, err := d.exciseTable(context.Background(), exciseSpan.UserKeyBounds(), m, level)
+						if err != nil {
+							d.mu.Lock()
+							d.mu.versions.logUnlock()
+							d.mu.Unlock()
+							td.Fatalf(t, "error when excising %s: %s", m.FileNum, err.Error())
+						}
+						applyExciseToVersionEdit(ve, m, leftTable, rightTable, level)
 					}
-					applyExciseToVersionEdit(ve, m, leftTable, rightTable, level)
 				}
-			}
-			d.mu.Lock()
-			d.mu.versions.logUnlock()
+			})
 			d.mu.Unlock()
 			return fmt.Sprintf("would excise %d files, use ingest-and-excise to excise.\n%s", len(ve.DeletedTables), ve.String())
 
@@ -1744,24 +1743,24 @@ func TestConcurrentExcise(t *testing.T) {
 			exciseSpan.End = []byte(td.CmdArgs[1].Key)
 
 			d.mu.Lock()
-			d.mu.versions.logLock()
-			d.mu.Unlock()
-			current := d.mu.versions.currentVersion()
-			for level := range current.Levels {
-				iter := current.Levels[level].Iter()
-				for m := iter.SeekGE(d.cmp, exciseSpan.Start); m != nil && d.cmp(m.Smallest.UserKey, exciseSpan.End) < 0; m = iter.Next() {
-					leftTable, rightTable, err := d.exciseTable(context.Background(), exciseSpan.UserKeyBounds(), m, level)
-					if err != nil {
-						d.mu.Lock()
-						d.mu.versions.logUnlock()
-						d.mu.Unlock()
-						return fmt.Sprintf("error when excising %s: %s", m.FileNum, err.Error())
+			d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+				d.mu.Unlock()
+				defer d.mu.Lock()
+				current := d.mu.versions.currentVersion()
+				for level := range current.Levels {
+					iter := current.Levels[level].Iter()
+					for m := iter.SeekGE(d.cmp, exciseSpan.Start); m != nil && d.cmp(m.Smallest.UserKey, exciseSpan.End) < 0; m = iter.Next() {
+						leftTable, rightTable, err := d.exciseTable(context.Background(), exciseSpan.UserKeyBounds(), m, level)
+						if err != nil {
+							d.mu.Lock()
+							d.mu.versions.logUnlock()
+							d.mu.Unlock()
+							td.Fatalf(t, "error when excising %s: %s", m.FileNum, err.Error())
+						}
+						applyExciseToVersionEdit(ve, m, leftTable, rightTable, level)
 					}
-					applyExciseToVersionEdit(ve, m, leftTable, rightTable, level)
 				}
-			}
-			d.mu.Lock()
-			d.mu.versions.logUnlock()
+			})
 			d.mu.Unlock()
 			return fmt.Sprintf("would excise %d files, use ingest-and-excise to excise.\n%s", len(ve.DeletedTables), ve.String())
 

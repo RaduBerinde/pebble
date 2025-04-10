@@ -382,11 +382,7 @@ func (vs *versionSet) close() error {
 	return nil
 }
 
-// logLock locks the manifest for writing. The lock must be released by
-// a call to logUnlock.
-//
-// DB.mu must be held when calling this method, but the mutex may be dropped and
-// re-acquired during the course of this method.
+// logLock locks the manifest for writing. Should not be used directly.
 func (vs *versionSet) logLock() {
 	// Wait for any existing writing to the manifest to complete, then mark the
 	// manifest as busy.
@@ -397,9 +393,7 @@ func (vs *versionSet) logLock() {
 	vs.writing = true
 }
 
-// logUnlock releases the lock for manifest writing.
-//
-// DB.mu must be held when calling this method.
+// logUnlock releases the lock for manifest writing. Should not be used directly.
 func (vs *versionSet) logUnlock() {
 	if !vs.writing {
 		vs.opts.Logger.Fatalf("MANIFEST not locked for writing")
@@ -408,9 +402,15 @@ func (vs *versionSet) logUnlock() {
 	vs.writerCond.Signal()
 }
 
-func (vs *versionSet) logUnlockAndInvalidatePickedCompactionCache() {
-	vs.pickedCompactionCache.invalidate()
-	vs.logUnlock()
+// EnsureNoVersionUpdatesLocked is used to wait for any ongoing version updates
+// to finish, then run a function while preventing any new version updates.
+//
+// DB.mu must be held. EnsureNoVersionUpdatesLocked first waits for any other
+// version update to complete, releasing and reacquiring DB.mu.
+func (vs *versionSet) EnsureNoVersionUpdatesLocked(fn func()) {
+	vs.logLock()
+	defer vs.logUnlock()
+	fn()
 }
 
 // versionUpdate is returned by the function passed to UpdateVersionLocked.
@@ -451,7 +451,8 @@ type versionUpdate struct {
 // If versionUpdate.VE is nil, the no update is applied (and no error is returned).
 func (vs *versionSet) UpdateVersionLocked(updateFn func() (versionUpdate, error)) error {
 	vs.logLock()
-	defer vs.logUnlockAndInvalidatePickedCompactionCache()
+	defer vs.logUnlock()
+	defer vs.pickedCompactionCache.invalidate()
 
 	vu, err := updateFn()
 	if err != nil || vu.VE == nil {

@@ -150,9 +150,10 @@ func testCheckpointImpl(t *testing.T, ddFile string, createOnShared bool) {
 			}
 			d := dbs[td.CmdArgs[0].String()]
 			d.mu.Lock()
-			d.mu.versions.logLock()
-			fileNums := d.mu.versions.virtualBackings.DiskFileNums()
-			d.mu.versions.logUnlock()
+			var fileNums []base.DiskFileNum
+			d.mu.versions.EnsureNoVersionUpdatesLocked(func() {
+				fileNums = d.mu.versions.virtualBackings.DiskFileNums()
+			})
 			d.mu.Unlock()
 
 			var buf bytes.Buffer
