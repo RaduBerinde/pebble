@@ -20,6 +20,7 @@ const testKeysBlockPropertyName = `pebble.internal.testkeys.suffixes`
 // NewTestKeysBlockPropertyCollector constructs a sstable property collector
 // over testkey suffixes.
 func NewTestKeysBlockPropertyCollector() BlockPropertyCollector {
+	panic("NO NO NO\n")
 	return NewBlockIntervalCollector(
 		testKeysBlockPropertyName,
 		&testKeysSuffixIntervalMapper{},
