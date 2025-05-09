@@ -4,17 +4,37 @@
 
 package compression
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/minio/minlz"
+)
 
 type Algorithm uint8
 
-// The available compression types.
+type AlgorithmWithLevel uint16
+
+// These algorithms have no level and can be used as both an Algorithm and an
+// AlgorithmWithLevel.
 const (
-	None Algorithm = iota
+	None = iota
 	Snappy
-	Zstd
+	nAlgorithmsNoLevel
+)
+
+const (
+	Zstd Algorithm = nAlgorithmsNoLevel + iota
 	MinLZ
 	nAlgorithms
+)
+
+const (
+	ZstdLevel1 = 1<<8 + AlgorithmWithLevel(Zstd)
+	ZstdLevel3 = 3<<8 + AlgorithmWithLevel(Zstd)
+	ZstdLevel7 = 7<<8 + AlgorithmWithLevel(Zstd)
+
+	MinLZFastest  = minlz.LevelFastest<<8 + AlgorithmWithLevel(MinLZ)
+	MinLZBalanced = minlz.LevelBalanced<<8 + AlgorithmWithLevel(MinLZ)
 )
 
 // String implements fmt.Stringer, returning a human-readable name for the
@@ -34,6 +54,21 @@ func (a Algorithm) String() string {
 	}
 }
 
+func (al AlgorithmWithLevel) Algorithm() Algorithm {
+	return Algorithm(al & 0xFF)
+}
+
+func (al AlgorithmWithLevel) level() int {
+	return int(al >> 8)
+}
+
+func (al AlgorithmWithLevel) String() string {
+	if al.level() == 0 {
+		return al.Algorithm().String()
+	}
+	return fmt.Sprintf("%s (level %d)", al.Algorithm(), al.level())
+}
+
 type Compressor interface {
 	// Compress a block, appending the compressed data to dst[:0].
 	Compress(dst, src []byte) []byte
@@ -43,16 +78,16 @@ type Compressor interface {
 	Close()
 }
 
-func GetCompressor(a Algorithm) Compressor {
-	switch a {
+func GetCompressor(a AlgorithmWithLevel) Compressor {
+	switch a.Algorithm() {
 	case None:
 		return noopCompressor{}
 	case Snappy:
 		return snappyCompressor{}
 	case Zstd:
-		return getZstdCompressor()
+		return getZstdCompressor(a.level())
 	case MinLZ:
-		return minlzCompressor{}
+		return getMinlzCompressor(a.level())
 	default:
 		panic("Invalid compression type.")
 	}

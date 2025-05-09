@@ -32,16 +32,20 @@ const (
 	NCompression
 )
 
-var algorithm = [...]compression.Algorithm{
+var algorithmWithLevel = [...]compression.AlgorithmWithLevel{
 	DefaultCompression: compression.Snappy,
 	NoCompression:      compression.None,
 	SnappyCompression:  compression.Snappy,
-	ZstdCompression:    compression.Zstd,
-	MinLZCompression:   compression.MinLZ,
+	ZstdCompression:    compression.ZstdLevel3,
+	MinLZCompression:   compression.MinLZFastest,
 }
 
 func (c Compression) algorithm() compression.Algorithm {
-	return algorithm[c]
+	return algorithmWithLevel[c].Algorithm()
+}
+
+func (c Compression) algorithmWithLevel() compression.AlgorithmWithLevel {
+	return algorithmWithLevel[c]
 }
 
 // String implements fmt.Stringer, returning a human-readable name for the
