@@ -116,3 +116,6 @@ func TestBlockWriterWithPrefix(t *testing.T) {
 		t.Fatalf("expected\n%x\nfound\n%x", expected, blk)
 	}
 }
+
+func TestLol(t *testing.T) {
+}

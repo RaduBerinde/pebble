@@ -32,3 +32,6 @@ func TestErrorFS(t *testing.T) {
 		}
 	})
 }
+
+func TestNew(t *testing.T) {
+}
