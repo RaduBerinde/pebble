@@ -1235,7 +1235,33 @@ type SpanPolicy struct {
 	// ValueStoragePolicy is a hint used to determine where to store the values
 	// for KVs.
 	ValueStoragePolicy ValueStoragePolicy
+
+	// TieringAttributeExtractor if not nil enables tiering of KVs. Within this span, this
+	// function returns tiering values which can be used to determine which KVs
+	// belong in the second tier (in conjunction with SecondTierRange).
+	//
+	// Note that this function can be called on arbitrarily old KVs with keys
+	// withing this span. If the function changes over time, it must be equipped
+	// to handle older KVs.
+	TieringAttributeExtractor TieringAttributeExtractor
+
+	// SecondTierRange is only used when TieringValueFn is not nil. It
+	// describes the range of tiering values (as returned by TieringValueFn on
+	// this span) which belong in the second tier.
+	SecondTierRange TieringAttributeRange
 }
+
+// TieringAttribute is a value associated with a given KV which is used to determine
+// (in conjunction with the span policy) if the KV should be written to a
+// secondary tier.
+type TieringAttribute = base.TieringAttribute
+
+// TieringAttributeRange describes a range of TieringValues, with both limits inclusive.
+type TieringAttributeRange = base.TieringAttributeRange
+
+// TieringAttributeExtractor is a function used to obtain the TieringAttribute from the full
+// value of a KV.
+type TieringAttributeExtractor = base.TieringAttributeExtractor
 
 // String returns a string representation of the SpanPolicy.
 func (p SpanPolicy) String() string {

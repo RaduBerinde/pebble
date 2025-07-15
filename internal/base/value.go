@@ -88,3 +88,24 @@ func (v *InternalValue) Clone(buf []byte, fetcher *LazyFetcher) (InternalValue, 
 	lv, buf := v.lazyValue.Clone(buf, fetcher)
 	return InternalValue{lazyValue: lv}, buf
 }
+
+// TieringAttribute is an opaque value associated with a given KV which is used
+// to determine (in conjunction with the span policy) if the KV should be
+// written to a secondary tier.
+//
+// This can encode a timestamp (e.g. last modification time) so that the span
+// policy moves KVs older than a certain timestamp to the second tier.
+type TieringAttribute uint64
+
+// TieringAttributeRange describes a range of TieringAttribute values, with both
+// limits inclusive.
+type TieringAttributeRange struct {
+	// Start is the inclusive start boundary of the range.
+	Start TieringAttribute
+	// End is the inclusive end boundary of the range.
+	End TieringAttribute
+}
+
+// TieringAttributeExtractor is a function used to obtain the TieringAttribute
+// from the full value of a KV.
+type TieringAttributeExtractor func(value []byte) (TieringAttribute, error)
