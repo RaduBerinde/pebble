@@ -11,6 +11,7 @@ import (
 
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/objstorage"
+	"github.com/cockroachdb/pebble/sstable/block/blockkind"
 )
 
 // PhysicalBlock is a block (possibly compressed) as it will be stored
@@ -114,8 +115,9 @@ func WriteAndReleasePhysicalBlock(
 //
 // It is not thread-safe and should not be used concurrently.
 type PhysicalBlockMaker struct {
-	Compressor  Compressor
-	Checksummer Checksummer
+	Compressor          Compressor
+	Checksummer         Checksummer
+	CompressionCounters *CompressionCounters
 }
 
 // PhysicalBlockFlags is a bitmask with flags used when making a physical block.
@@ -127,15 +129,32 @@ const (
 )
 
 // Init the physical block maker. Closed must be called when no longer needed.
-func (p *PhysicalBlockMaker) Init(profile *CompressionProfile, checksumType ChecksumType) {
+func (p *PhysicalBlockMaker) Init(
+	profile *CompressionProfile, checksumType ChecksumType, compressionCounters *CompressionCounters,
+) {
 	p.Compressor = MakeCompressor(profile)
 	p.Checksummer.Init(checksumType)
+	p.CompressionCounters = compressionCounters
 }
 
 // Close must be called when the PhysicalBlockMaker is no longer needed. After
 // Close is called, the PhysicalBlockMaker must not be used again (unless it is
 // initialized again).
 func (p *PhysicalBlockMaker) Close() {
+	// Update the compression counters.
+	if p.CompressionCounters != nil {
+		var dataOrValueBytes, otherBytes uint64
+		for kind, bytes := range p.Compressor.InputBytes() {
+			switch kind {
+			case blockkind.SSTableData, blockkind.SSTableValue, blockkind.BlobValue:
+				dataOrValueBytes += bytes
+			default:
+				otherBytes += bytes
+			}
+		}
+		p.CompressionCounters.DataOrValueBlocks.LogicalBytesCompressed.Add(dataOrValueBytes)
+		p.CompressionCounters.OtherBlocks.LogicalBytesCompressed.Add(otherBytes)
+	}
 	p.Compressor.Close()
 }
 

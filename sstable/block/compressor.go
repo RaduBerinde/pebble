@@ -5,6 +5,7 @@
 package block
 
 import (
+	"iter"
 	"math/rand"
 
 	"github.com/cockroachdb/pebble/internal/compression"
@@ -24,6 +25,10 @@ type Compressor struct {
 	otherBlocksCompressor compression.Compressor
 
 	stats CompressionStats
+
+	// inputBytes keeps track of the total number of bytes passed to the
+	// compressor, by block kind.
+	inputBytes [blockkind.NumKinds]uint64
 }
 
 // MakeCompressor returns a Compressor that applies the given compression
@@ -69,6 +74,8 @@ func (c *Compressor) Close() {
 //
 // In addition to the buffer, returns the algorithm that was used.
 func (c *Compressor) Compress(dst, src []byte, kind Kind) (CompressionIndicator, []byte) {
+	c.inputBytes[kind] += uint64(len(src))
+
 	var compressor compression.Compressor
 	switch kind {
 	case blockkind.SSTableData:
@@ -113,6 +120,18 @@ func (c *Compressor) UncompressedBlock(size int, kind Kind) {
 // next call to the Compressor.
 func (c *Compressor) Stats() *CompressionStats {
 	return &c.stats
+}
+
+// InputBytes returns an iterator over the total number of input bytes passed
+// through the compressor, by block kind.
+func (c *Compressor) InputBytes() iter.Seq2[Kind, uint64] {
+	return func(yield func(blockkind.Kind, uint64) bool) {
+		for k, v := range c.inputBytes {
+			if v != 0 && !yield(blockkind.Kind(k), v) {
+				return
+			}
+		}
+	}
 }
 
 type Decompressor = compression.Decompressor

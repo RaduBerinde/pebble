@@ -1163,6 +1163,10 @@ type Options struct {
 	// preemptively reduce internal fragmentation when loaded into the block cache.
 	AllocatorSizeClasses []int
 
+	// CompressionCounters holds running counters for the number of bytes
+	// compressed and decompressed; if set, these counters are updated.
+	CompressionCounters *CompressionCounters
+
 	// private options are only used by internal tests or are used internally
 	// for facilitating upgrade paths of unconfigurable functionality.
 	private struct {
@@ -2583,6 +2587,7 @@ func (o *Options) MakeWriterOptions(level int, format sstable.TableFormat) sstab
 	writerOpts.AllocatorSizeClasses = o.AllocatorSizeClasses
 	writerOpts.NumDeletionsThreshold = o.Experimental.NumDeletionsThreshold
 	writerOpts.DeletionSizeRatioThreshold = o.Experimental.DeletionSizeRatioThreshold
+	writerOpts.CompressionCounters = o.CompressionCounters
 	return writerOpts
 }
 
@@ -2591,9 +2596,10 @@ func (o *Options) MakeWriterOptions(level int, format sstable.TableFormat) sstab
 func (o *Options) MakeBlobWriterOptions(level int, format blob.FileFormat) blob.FileWriterOptions {
 	lo := o.Levels[level]
 	return blob.FileWriterOptions{
-		Format:       format,
-		Compression:  lo.Compression(),
-		ChecksumType: block.ChecksumTypeCRC32c,
+		Format:              format,
+		Compression:         lo.Compression(),
+		CompressionCounters: o.CompressionCounters,
+		ChecksumType:        block.ChecksumTypeCRC32c,
 		FlushGovernor: block.MakeFlushGovernor(
 			lo.BlockSize,
 			lo.BlockSizeThreshold,

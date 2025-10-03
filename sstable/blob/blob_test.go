@@ -12,6 +12,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/cockroachdb/crlib/crhumanize"
 	"github.com/cockroachdb/crlib/crstrings"
 	"github.com/cockroachdb/crlib/testutils/leaktest"
 	"github.com/cockroachdb/datadriven"
@@ -39,7 +40,7 @@ func TestBlobWriter(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			printFileWriterStats(&buf, stats)
+			printFileWriterStats(&buf, stats, opts.CompressionCounters)
 			return buf.String()
 		case "build-sparse":
 			opts := scanFileWriterOptions(t, td)
@@ -61,7 +62,7 @@ func TestBlobWriter(t *testing.T) {
 			}
 			stats, err := w.Close()
 			require.NoError(t, err)
-			printFileWriterStats(&buf, stats)
+			printFileWriterStats(&buf, stats, opts.CompressionCounters)
 			return buf.String()
 		case "open":
 			r, err := NewFileReader(context.Background(), obj, FileReaderOptions{})
@@ -102,19 +103,26 @@ func scanFileWriterOptions(t *testing.T, td *datadriven.TestData) FileWriterOpti
 	}
 	td.MaybeScanArgs(t, "format", &format)
 	return FileWriterOptions{
-		Format:        FileFormat(format),
-		Compression:   compression,
-		ChecksumType:  block.ChecksumTypeCRC32c,
-		FlushGovernor: block.MakeFlushGovernor(targetBlockSize, blockSizeThreshold, 0, nil),
+		Format:              FileFormat(format),
+		Compression:         compression,
+		CompressionCounters: &block.CompressionCounters{},
+		ChecksumType:        block.ChecksumTypeCRC32c,
+		FlushGovernor:       block.MakeFlushGovernor(targetBlockSize, blockSizeThreshold, 0, nil),
 	}
 }
 
-func printFileWriterStats(w io.Writer, stats FileWriterStats) {
+func printFileWriterStats(w io.Writer, stats FileWriterStats, counters *block.CompressionCounters) {
 	fmt.Fprintf(w, "Stats:\n")
 	fmt.Fprintf(w, "  BlockCount: %d\n", stats.BlockCount)
 	fmt.Fprintf(w, "  ValueCount: %d\n", stats.ValueCount)
-	fmt.Fprintf(w, "  UncompressedValueBytes: %d\n", stats.UncompressedValueBytes)
-	fmt.Fprintf(w, "  FileLen: %d\n", stats.FileLen)
+	fmt.Fprintf(w, "  UncompressedValueBytes: %s\n",
+		crhumanize.Bytes(stats.UncompressedValueBytes, crhumanize.Exact, crhumanize.Compact),
+	)
+	fmt.Fprintf(w, "  FileLen: %s\n", crhumanize.Bytes(stats.FileLen, crhumanize.Exact, crhumanize.Compact))
+	fmt.Fprintf(w, "Compression counters: data/value %d  other: %d\n",
+		crhumanize.Bytes(counters.DataOrValueBlocks.LogicalBytesCompressed.Load(), crhumanize.Exact, crhumanize.Compact),
+		crhumanize.Bytes(counters.OtherBlocks.LogicalBytesCompressed.Load(), crhumanize.Exact, crhumanize.Compact),
+	)
 }
 
 func TestHandleRoundtrip(t *testing.T) {

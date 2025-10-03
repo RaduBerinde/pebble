@@ -7,6 +7,7 @@ package block
 import (
 	"runtime"
 	"strings"
+	"sync/atomic"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/compression"
@@ -213,5 +214,35 @@ func compressionIndicatorFromAlgorithm(algo compression.Algorithm) CompressionIn
 		return MinLZCompressionIndicator
 	default:
 		panic("invalid algorithm")
+	}
+}
+
+// CompressionCounters holds running counters for the number of bytes compressed
+// and decompressed.
+//
+// The main purpose for these metrics is to allow estimating how overall CPU
+// usage would change with a different compression algorithm (in conjunction
+// with performance information about the algorithms, like that produced by the
+// compression analyzer).
+//
+// In all cases, the figures refer to the uncompressed ("logical") size; i.e.
+// the *input* size for compression and the *output* size for decompression.
+//
+// Note that even if the compressor decides that it's not worth compressing a
+// block, those bytes are still counted (they are relevant for CPU usage).
+//
+// Blocks for which compression is disabled upfront (e.g. filter blocks) are not
+// counted.
+type CompressionCounters struct {
+	// DataOrValueBlocks holds counters for data blocks, sstable value, and blob
+	// file value blocks.
+	DataOrValueBlocks struct {
+		LogicalBytesCompressed   atomic.Uint64
+		LogicalBytesDecompressed atomic.Uint64
+	}
+	// OtherBlocks holds counters for all other block kinds.
+	OtherBlocks struct {
+		LogicalBytesCompressed   atomic.Uint64
+		LogicalBytesDecompressed atomic.Uint64
 	}
 }
