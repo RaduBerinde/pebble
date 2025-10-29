@@ -79,8 +79,9 @@ type obsoleteFile struct {
 }
 
 func (of *obsoleteFile) needsPacing() bool {
+	return false
 	// We only need to pace local objects--sstables and blob files.
-	return of.isLocal && (of.fileType == base.FileTypeTable || of.fileType == base.FileTypeBlob)
+	//return of.isLocal && (of.fileType == base.FileTypeTable || of.fileType == base.FileTypeBlob)
 }
 
 type cleanupJob struct {
