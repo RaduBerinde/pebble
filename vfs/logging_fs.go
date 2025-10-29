@@ -118,10 +118,6 @@ func (fs loggingFS) RemoveAll(name string) error {
 	return err
 }
 
-func (fs loggingFS) Unwrap() FS {
-	return fs.FS
-}
-
 type loggingFile struct {
 	File
 	name  string
