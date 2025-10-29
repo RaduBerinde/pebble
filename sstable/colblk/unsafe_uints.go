@@ -52,7 +52,11 @@ func DecodeUnsafeUints(b []byte, off uint32, rows int) (_ UnsafeUints, endOffset
 	if w > 0 {
 		off = align(off, uint32(w))
 	}
-	return makeUnsafeUints(base, unsafe.Pointer(&b[off]), w), off + uint32(rows*w)
+	endOffset = off + uint32(rows*w)
+	if len(b) < int(endOffset) {
+		panic("buffer too small")
+	}
+	return makeUnsafeUints(base, unsafe.Pointer(&b[off]), w), endOffset
 }
 
 // Assert that DecodeUnsafeIntegerSlice implements DecodeFunc.

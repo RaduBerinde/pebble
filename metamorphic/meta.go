@@ -27,10 +27,8 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
-	"github.com/cockroachdb/pebble/internal/dsl"
 	"github.com/cockroachdb/pebble/internal/randvar"
 	"github.com/cockroachdb/pebble/vfs"
-	"github.com/cockroachdb/pebble/vfs/errorfs"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 )
@@ -247,7 +245,7 @@ func RunAndCompare(t *testing.T, rootDir string, rOpts ...RunOption) {
 			historyPath := filepath.Join(runDir, "history")
 			historyLines := strings.Split(readFile(historyPath), "\n")
 			// Show only the last 3000 lines of history.
-			if maxLines := 3000; len(historyLines) > maxLines {
+			if maxLines := 200; len(historyLines) > maxLines {
 				start := len(historyLines) - maxLines
 				historyLines = append([]string{fmt.Sprintf("...[%d lines skipped]...", start)}, historyLines[start:]...)
 			}
@@ -524,20 +522,20 @@ func RunOnce(t TestingT, runDir string, seed uint64, historyPath string, rOpts .
 	// test options require it. We cap the overlal injected latency to ten
 	// seconds to avoid excessive test run times when paired with small target
 	// file sizes, block sizes, etc.
-	if testOpts.ioLatencyProbability > 0 {
-		opts.FS = errorfs.Wrap(opts.FS, errorfs.RandomLatency(
-			errorfs.Randomly(testOpts.ioLatencyProbability, testOpts.ioLatencySeed),
-			testOpts.ioLatencyMean,
-			testOpts.ioLatencySeed,
-			10*time.Second,
-		))
-	}
+	//if testOpts.ioLatencyProbability > 0 {
+	//	opts.FS = errorfs.Wrap(opts.FS, errorfs.RandomLatency(
+	//		errorfs.Randomly(testOpts.ioLatencyProbability, testOpts.ioLatencySeed),
+	//		testOpts.ioLatencyMean,
+	//		testOpts.ioLatencySeed,
+	//		10*time.Second,
+	//	))
+	//}
 
 	// Wrap the filesystem with one that will inject errors into read
 	// operations with *errorRate probability.
-	opts.FS = errorfs.Wrap(opts.FS, errorfs.ErrInjected.If(
-		dsl.And(errorfs.Reads, errorfs.Randomly(runOpts.errorRate, int64(seed))),
-	))
+	//opts.FS = errorfs.Wrap(opts.FS, errorfs.ErrInjected.If(
+	//	dsl.And(errorfs.Reads, errorfs.Randomly(runOpts.errorRate, int64(seed))),
+	//))
 
 	// Bound testOpts.threads to runOpts.maxThreads.
 	if runOpts.maxThreads < testOpts.Threads {

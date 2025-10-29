@@ -488,6 +488,7 @@ func (r *Reader) doRead(
 
 	compressed := Alloc(int(bh.Length+TrailerLen), env.BufferPool)
 	readStopwatch := base.MakeStopwatch()
+	fmt.Printf("reading block into %p .. %p\n", &compressed.BlockData()[0], &compressed.BlockData()[bh.Length+TrailerLen-1])
 	var err error
 	if readHandle != nil {
 		err = readHandle.ReadAt(ctx, compressed.BlockData(), int64(bh.Offset))

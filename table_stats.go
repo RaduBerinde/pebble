@@ -90,7 +90,7 @@ func (d *DB) collectTableStats() bool {
 	const maxTableStatsPerScan = 50
 
 	d.mu.Lock()
-	if !d.shouldCollectTableStatsLocked() {
+	if true || !d.shouldCollectTableStatsLocked() {
 		d.mu.Unlock()
 		return false
 	}
@@ -204,6 +204,8 @@ func (d *DB) loadNewFileStats(
 
 		stats, newHints, err := d.loadTableStats(ctx, rs.current, nf.Level, nf.Meta)
 		if err != nil {
+			fmt.Printf("meta: %s\n", nf.Meta)
+			fmt.Printf("version: %s\n", rs.current.DebugString())
 			d.opts.EventListener.BackgroundError(err)
 			continue
 		}

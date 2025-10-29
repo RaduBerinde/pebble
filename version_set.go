@@ -6,6 +6,7 @@ package pebble
 
 import (
 	"fmt"
+	"runtime/debug"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -333,14 +334,19 @@ type versionUpdate struct {
 func (vs *versionSet) UpdateVersionLocked(
 	updateFn func() (versionUpdate, error),
 ) (time.Duration, error) {
+	debug.PrintStack()
+	fmt.Printf("UpdateVersionLocked starting\n")
+	defer fmt.Printf("UpdateVersionLocked done\n")
 	vs.logLock()
 	defer vs.logUnlockAndInvalidatePickedCompactionCache()
 
+	fmt.Printf("calling updateFn\n")
 	vu, err := updateFn()
 	if err != nil || vu.VE == nil {
 		return 0, err
 	}
 
+	fmt.Printf("updateFn done\n")
 	if !vs.writing {
 		vs.opts.Logger.Fatalf("MANIFEST not locked for writing")
 	}
@@ -457,6 +463,7 @@ func (vs *versionSet) UpdateVersionLocked(
 		getZombieTablesAndUpdateVirtualBackings(ve, &vs.latest.virtualBackings, vs.provider)
 
 	var l0Update manifest.L0PreparedUpdate
+	fmt.Printf("main function start\n")
 	if err := func() error {
 		vs.mu.Unlock()
 		defer vs.mu.Lock()
@@ -472,6 +479,7 @@ func (vs *versionSet) UpdateVersionLocked(
 		// we've created the new manifest with the previous version state, we'll
 		// append the version edit `ve` to the tail of the new manifest.
 		if newManifestFileNum != 0 {
+			fmt.Printf("creating manifest\n")
 			if err := vs.createManifest(vs.dirname, newManifestFileNum, minUnflushedLogNum, nextFileNum, newManifestVirtualBackings); err != nil {
 				vs.opts.EventListener.ManifestCreated(ManifestCreateInfo{
 					JobID:   int(vu.JobID),
@@ -483,6 +491,8 @@ func (vs *versionSet) UpdateVersionLocked(
 			}
 		}
 
+		time.Sleep(time.Millisecond)
+		fmt.Printf("apply and update version edit\n")
 		// Call ApplyAndUpdateVersionEdit before accumulating the version edit.
 		// If any blob files are no longer referenced, the version edit will be
 		// updated to explicitly record the deletion of the blob files. This can
@@ -493,17 +503,23 @@ func (vs *versionSet) UpdateVersionLocked(
 			return errors.Wrap(err, "MANIFEST blob files apply and update failed")
 		}
 
+		time.Sleep(time.Millisecond)
+		fmt.Printf("bulkEdit accumulate\n")
 		var bulkEdit manifest.BulkVersionEdit
 		err := bulkEdit.Accumulate(ve)
 		if err != nil {
 			return errors.Wrap(err, "MANIFEST accumulate failed")
 		}
+		time.Sleep(time.Millisecond)
+		fmt.Printf("bulkEdit Apply\n")
 		newVersion, err = bulkEdit.Apply(currentVersion, vs.opts.Experimental.ReadCompactionRate)
 		if err != nil {
 			return errors.Wrap(err, "MANIFEST apply failed")
 		}
 		l0Update = vs.latest.l0Organizer.PrepareUpdate(&bulkEdit, newVersion)
 
+		time.Sleep(time.Millisecond)
+		fmt.Printf("manifest.Next\n")
 		w, err := vs.manifest.Next()
 		if err != nil {
 			return errors.Wrap(err, "MANIFEST next record write failed")
@@ -514,16 +530,24 @@ func (vs *versionSet) UpdateVersionLocked(
 		// fraught. Instead we rely on the standard recovery mechanism run when a
 		// database is open. In particular, that mechanism generates a new MANIFEST
 		// and ensures it is synced.
+		time.Sleep(time.Millisecond)
+		fmt.Printf("Encoding\n")
 		if err := ve.Encode(w); err != nil {
 			return errors.Wrap(err, "MANIFEST write failed")
 		}
+		time.Sleep(time.Millisecond)
+		fmt.Printf("Flushing\n")
 		if err := vs.manifest.Flush(); err != nil {
+			time.Sleep(time.Millisecond)
 			return errors.Wrap(err, "MANIFEST flush failed")
 		}
+		fmt.Printf("Syncing\n")
 		if err := vs.manifestFile.Sync(); err != nil {
 			return errors.Wrap(err, "MANIFEST sync failed")
 		}
 		if newManifestFileNum != 0 {
+			time.Sleep(time.Millisecond)
+			fmt.Printf("Move marker\n")
 			// NB: Move() is responsible for syncing the data directory.
 			if err := vs.manifestMarker.Move(base.MakeFilename(base.FileTypeManifest, newManifestFileNum)); err != nil {
 				return errors.Wrap(err, "MANIFEST set current failed")
@@ -545,6 +569,8 @@ func (vs *versionSet) UpdateVersionLocked(
 		vs.opts.Logger.Fatalf("%s", err)
 		return 0, err
 	}
+
+	fmt.Printf("main function done\n")
 
 	if requireRotation {
 		// Successfully rotated.
@@ -583,6 +609,7 @@ func (vs *versionSet) UpdateVersionLocked(
 			obsoleteVirtualBackings.TableBackings = append(obsoleteVirtualBackings.TableBackings, b.backing)
 		}
 	}
+	fmt.Printf("add obsolete\n")
 	vs.addObsoleteLocked(obsoleteVirtualBackings)
 
 	// Install the new version.

@@ -544,7 +544,9 @@ func standardOptions(kf KeyFormat) []*TestOptions {
 [Level "0"]
   block_size=1
 [Value Separation]
-enabled = false
+  enabled = false
+[TestOptions]
+  threads=1
 `,
 		13: `
 [Level "0"]

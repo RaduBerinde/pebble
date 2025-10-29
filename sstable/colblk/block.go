@@ -250,6 +250,7 @@ func (e *BlockEncoder) Encode(rows int, w ColumnWriter) {
 // returned byte slice points to the encoder's buffer, so if the encoder is
 // reused the returned slice will be invalidated.
 func (e *BlockEncoder) Finish() []byte {
+	fmt.Printf("finishing block %p .. %p\n", &e.buf[0], &e.buf[e.pageOffset])
 	e.buf[e.pageOffset] = 0x00 // Padding byte
 	e.pageOffset++
 	if e.pageOffset != uint32(len(e.buf)) {

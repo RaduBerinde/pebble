@@ -5,6 +5,7 @@
 package compact
 
 import (
+	"fmt"
 	"sort"
 	"time"
 
@@ -235,6 +236,10 @@ func (r *Runner) WriteTable(
 	limitKey []byte,
 	valueSeparation ValueSeparation,
 ) {
+	//deletepacer.FooMu.Lock()
+	//defer deletepacer.FooMu.Unlock()
+	fmt.Printf("compact.Runner: writing table\n")
+	defer fmt.Printf("compact.Runner: done writing table\n")
 	if r.err != nil {
 		panic("error already encountered")
 	}

@@ -765,6 +765,7 @@ func (s *CurrentBlobFileSet) ApplyAndUpdateVersionEdit(ve *VersionEdit) error {
 
 	currentTime := s.rewrite.heuristic.CurrentTime()
 
+	fmt.Printf("newBlobFiles: %v\n", len(ve.NewBlobFiles))
 	// Insert new blob files into the set.
 	for _, m := range ve.NewBlobFiles {
 		// Check whether we already have a blob file with this ID. This is
@@ -829,12 +830,17 @@ func (s *CurrentBlobFileSet) ApplyAndUpdateVersionEdit(ve *VersionEdit) error {
 		}
 	}
 
+	time.Sleep(time.Millisecond)
+	fmt.Printf("deletedTables: %v\n", len(ve.DeletedTables))
 	// Remove references to blob files from deleted tables. Any referenced blob
 	// files should already exist in s.files. If the removal of a reference
 	// causes the blob file's ref count to drop to zero, the blob file is a
 	// zombie. We update the version edit to record the blob file removal and
 	// remove it from the set.
 	for _, meta := range ve.DeletedTables {
+		if len(meta.BlobReferences) > 0 {
+			fmt.Printf("table has %d blob refs\n", len(meta.BlobReferences))
+		}
 		for _, ref := range meta.BlobReferences {
 			cbf, ok := s.files[ref.FileID]
 			if !ok {
@@ -978,6 +984,7 @@ func (s *CurrentBlobFileSet) ReferencingTables(fileID base.BlobFileID) []*TableM
 // old enough to be eligible for rewriting.
 func (s *CurrentBlobFileSet) moveAgedBlobFilesToCandidatesHeap(now time.Time) {
 	defer s.maybeVerifyHeapStateInvariants()
+	fmt.Printf("moveAgedBlobFilesToCandidatesHeap: %d\n", len(s.rewrite.candidates.items))
 	for len(s.rewrite.recentlyCreated.items) > 0 {
 		root := s.rewrite.recentlyCreated.items[0]
 		if now.Sub(time.Unix(int64(root.metadata.Physical.CreationTime), 0)) < s.rewrite.heuristic.MinimumAge {

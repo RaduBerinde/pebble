@@ -5,6 +5,7 @@
 package wal
 
 import (
+	"fmt"
 	"os"
 	"slices"
 	"sync"
@@ -108,6 +109,9 @@ func (m *StandaloneManager) Obsolete(
 		toDelete = append(toDelete, dl)
 		return true
 	})
+	if len(toDelete) > 0 {
+		fmt.Printf("toDelete from initial: %v\n", toDelete)
+	}
 
 	i := 0
 	for ; i < len(m.mu.queue); i++ {
