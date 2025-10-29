@@ -5,8 +5,8 @@
 package deletepacer
 
 import (
-	"context"
-	"runtime/pprof"
+	"fmt"
+	"runtime"
 	"sync"
 	"time"
 
@@ -104,11 +104,12 @@ func Open(
 	dp.mu.queuedHistory.Init(crtime.NowMono(), RecentRateWindow)
 	dp.mu.deletedCond.L = &dp.mu.Mutex
 	dp.waitGroup.Add(1)
-	go func() {
-		pprof.Do(context.Background(), pprof.Labels("pebble", "gc"), func(context.Context) {
-			dp.mainLoop()
-		})
-	}()
+	//go func() {
+	//	pprof.Do(context.Background(), pprof.Labels("pebble", "gc"), func(context.Context) {
+	//		dp.mainLoop()
+	//	})
+	//}()
+	go dp.mainLoop()
 	return dp
 }
 
@@ -148,6 +149,7 @@ func (dp *DeletePacer) Close() {
 //   - the backlog (deletions that have been in the queue for more than 5 minutes);
 //   - whether we are running low on free space.
 func (dp *DeletePacer) mainLoop() {
+	stackBuf := make([]byte, 1<<20)
 	defer dp.waitGroup.Done()
 
 	timer := time.NewTimer(time.Duration(0))
@@ -183,7 +185,9 @@ func (dp *DeletePacer) mainLoop() {
 		case dp.mu.queue.Len() == 0:
 			// Nothing to do.
 			dp.mu.Unlock()
+			fmt.Printf("notification wait start\n")
 			<-dp.notifyCh
+			fmt.Printf("notification wait end\n")
 			dp.mu.Lock()
 
 		case rateCalc.InDebt():
@@ -194,25 +198,45 @@ func (dp *DeletePacer) mainLoop() {
 			// rate (and check if we're running low on free space).
 			waitTime = min(waitTime, 10*time.Second)
 			timer.Reset(waitTime)
+			fmt.Printf("timer wait start\n")
 			select {
 			case <-timer.C:
 			case <-dp.notifyCh:
 				timer.Stop()
 			}
+			fmt.Printf("timer wait stop\n")
 			dp.mu.Lock()
 
 		default:
 			// Delete a file.
 			file := *dp.mu.queue.PeekFront()
+			//fmt.Printf("peek %p\n", unsafe.StringData(file.Path))
+			//fmt.Printf("1: %s\n", file.Path)
 			dp.mu.queue.PopFront()
+			//fmt.Printf("2: %s\n", file.Path)
 			if b := file.pacingBytes(); b != 0 {
 				dp.mu.queuedPacingBytes = invariants.SafeSub(dp.mu.queuedPacingBytes, b)
 				rateCalc.AddDebt(b)
 			}
+			//fmt.Printf("3: %s\n", file.Path)
+			//fmt.Printf("before unlock: %p\n", unsafe.StringData(file.Path))
+			func() {
+				defer func() {
+					if r := recover(); r != nil {
+						fmt.Println(r)
+						panic(r)
+					}
+				}()
+				n := runtime.Stack(stackBuf, true)
+				fmt.Printf("FOO-START\n%sFOO-END\n", stackBuf[:n])
+			}()
 			func() {
 				dp.mu.Unlock()
 				defer dp.mu.Lock()
+				fmt.Printf("4: %s\n", file.Path)
+				fmt.Printf("delete start\n")
 				dp.deleteFn(file.ObsoleteFile, file.JobID)
+				fmt.Printf("delete end\n")
 			}()
 			dp.mu.metrics.InQueue.Dec(file.FileType, file.FileSize, file.IsLocal)
 			dp.mu.metrics.Deleted.Inc(file.FileType, file.FileSize, file.IsLocal)

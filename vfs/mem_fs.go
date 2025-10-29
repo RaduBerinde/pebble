@@ -359,6 +359,8 @@ func (y *MemFS) OpenDir(fullname string) (File, error) {
 
 // Remove implements FS.Remove.
 func (y *MemFS) Remove(fullname string) error {
+	fmt.Printf("MemFS.Remove start\n")
+	defer fmt.Printf("MemFS.Remove done\n")
 	if y.crashable {
 		y.cloneMu.RLock()
 		defer y.cloneMu.RUnlock()
@@ -419,6 +421,8 @@ func (y *MemFS) RemoveAll(fullname string) error {
 
 // Rename implements FS.Rename.
 func (y *MemFS) Rename(oldname, newname string) error {
+	fmt.Printf("MemFS.Rename start\n")
+	defer fmt.Printf("MemFS.Rename done\n")
 	if y.crashable {
 		y.cloneMu.RLock()
 		defer y.cloneMu.RUnlock()

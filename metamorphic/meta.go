@@ -246,8 +246,8 @@ func RunAndCompare(t *testing.T, rootDir string, rOpts ...RunOption) {
 		if err != nil {
 			historyPath := filepath.Join(runDir, "history")
 			historyLines := strings.Split(readFile(historyPath), "\n")
-			// Show only the last 30 lines of history.
-			if maxLines := 30; len(historyLines) > maxLines {
+			// Show only the last 3000 lines of history.
+			if maxLines := 3000; len(historyLines) > maxLines {
 				start := len(historyLines) - maxLines
 				historyLines = append([]string{fmt.Sprintf("...[%d lines skipped]...", start)}, historyLines[start:]...)
 			}

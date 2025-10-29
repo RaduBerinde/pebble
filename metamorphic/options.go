@@ -543,6 +543,8 @@ func standardOptions(kf KeyFormat) []*TestOptions {
 		12: `
 [Level "0"]
   block_size=1
+[Value Separation]
+enabled = false
 `,
 		13: `
 [Level "0"]

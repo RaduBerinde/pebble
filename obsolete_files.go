@@ -6,7 +6,10 @@ package pebble
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
+	"strings"
+	"unsafe"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/errors/oserror"
@@ -52,12 +55,18 @@ func deleteObsoleteFile(
 	var err error
 	if of.FileType == base.FileTypeTable || of.FileType == base.FileTypeBlob {
 		var meta objstorage.ObjectMetadata
+		fmt.Printf("objProvider.Lookup start\n")
 		meta, err = objProvider.Lookup(of.FileType, of.FileNum)
+		fmt.Printf("objProvider.Lookup done\n")
 		if err != nil {
 			path = "<nil>"
 		} else {
+			fmt.Printf("objProvider.Path\n")
 			path = objProvider.Path(meta)
+			fmt.Printf("objProvider.Path: %s\n", path)
+			fmt.Printf("objProvider.Remove start\n")
 			err = objProvider.Remove(of.FileType, of.FileNum)
+			fmt.Printf("objProvider.Remove done\n")
 		}
 		if objProvider.IsNotExistError(err) {
 			return
@@ -65,7 +74,13 @@ func deleteObsoleteFile(
 	} else {
 		// TODO(peter): need to handle this error, probably by re-adding the
 		// file that couldn't be deleted to one of the obsolete slices map.
+		fmt.Printf("cleaner.Clean\n")
+		fmt.Printf("cleaner.Clean %s %s\n", of.FileType, of.FileNum)
+		fmt.Printf("cleaner.Clean string: %p %d\n", unsafe.StringData(path), len(path))
+		fmt.Printf("cleaner.Clean path clone: %s\n", strings.Clone(path))
+		fmt.Printf("cleaner.Clean path: %s\n", path)
 		err := cleaner.Clean(of.FS, of.FileType, path)
+		fmt.Printf("cleaner.Clean done\n")
 		if oserror.IsNotExist(err) {
 			return
 		}
@@ -249,6 +264,7 @@ func (d *DB) deleteObsoleteFiles(jobID JobID) {
 
 	// NB: d.mu.versions.minUnflushedLogNum is the log number of the earliest
 	// log that has not had its contents flushed to an sstable.
+	fmt.Printf("log manager: %T\n", d.mu.log.manager)
 	obsoleteLogs, err := d.mu.log.manager.Obsolete(wal.NumWAL(d.mu.versions.minUnflushedLogNum), noRecycle)
 	if err != nil {
 		panic(err)
@@ -304,6 +320,7 @@ func (d *DB) deleteObsoleteFiles(jobID JobID) {
 	filesToDelete = append(filesToDelete, obsoleteTables...)
 	filesToDelete = append(filesToDelete, obsoleteBlobs...)
 	for _, f := range obsoleteLogs {
+		fmt.Printf("log to delete %s %p %d\n", f.Path, unsafe.StringData(f.Path), len(f.Path))
 		filesToDelete = append(filesToDelete, deletepacer.ObsoleteFile{
 			FileType: base.FileTypeLog,
 			FS:       f.FS,
