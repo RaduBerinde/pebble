@@ -8,7 +8,6 @@ import (
 	"cmp"
 	"fmt"
 	"slices"
-	"strings"
 	"unsafe"
 
 	"github.com/cockroachdb/errors"
@@ -55,32 +54,18 @@ func deleteObsoleteFile(
 	var err error
 	if of.FileType == base.FileTypeTable || of.FileType == base.FileTypeBlob {
 		var meta objstorage.ObjectMetadata
-		fmt.Printf("objProvider.Lookup start\n")
 		meta, err = objProvider.Lookup(of.FileType, of.FileNum)
-		fmt.Printf("objProvider.Lookup done\n")
 		if err != nil {
 			path = "<nil>"
 		} else {
-			fmt.Printf("objProvider.Path\n")
 			path = objProvider.Path(meta)
-			fmt.Printf("objProvider.Path: %s\n", path)
-			fmt.Printf("objProvider.Remove start\n")
 			err = objProvider.Remove(of.FileType, of.FileNum)
-			fmt.Printf("objProvider.Remove done\n")
 		}
 		if objProvider.IsNotExistError(err) {
 			return
 		}
 	} else {
-		// TODO(peter): need to handle this error, probably by re-adding the
-		// file that couldn't be deleted to one of the obsolete slices map.
-		fmt.Printf("cleaner.Clean\n")
-		fmt.Printf("cleaner.Clean %s %s\n", of.FileType, of.FileNum)
-		fmt.Printf("cleaner.Clean string: %p %d\n", unsafe.StringData(path), len(path))
-		fmt.Printf("cleaner.Clean path clone: %s\n", strings.Clone(path))
-		fmt.Printf("cleaner.Clean path: %s\n", path)
 		err := cleaner.Clean(of.FS, of.FileType, path)
-		fmt.Printf("cleaner.Clean done\n")
 		if oserror.IsNotExist(err) {
 			return
 		}
@@ -264,11 +249,13 @@ func (d *DB) deleteObsoleteFiles(jobID JobID) {
 
 	// NB: d.mu.versions.minUnflushedLogNum is the log number of the earliest
 	// log that has not had its contents flushed to an sstable.
-	fmt.Printf("log manager: %T\n", d.mu.log.manager)
 	obsoleteLogs, err := d.mu.log.manager.Obsolete(wal.NumWAL(d.mu.versions.minUnflushedLogNum), noRecycle)
 	if err != nil {
 		panic(err)
 	}
+	//for i := range obsoleteLogs {
+	//	obsoleteLogs[i].Path = strings.Clone(obsoleteLogs[i].Path)
+	//}
 
 	obsoleteTables := slices.Clone(d.mu.versions.obsoleteTables)
 	d.mu.versions.obsoleteTables = d.mu.versions.obsoleteTables[:0]
@@ -320,7 +307,6 @@ func (d *DB) deleteObsoleteFiles(jobID JobID) {
 	filesToDelete = append(filesToDelete, obsoleteTables...)
 	filesToDelete = append(filesToDelete, obsoleteBlobs...)
 	for _, f := range obsoleteLogs {
-		fmt.Printf("log to delete %s %p %d\n", f.Path, unsafe.StringData(f.Path), len(f.Path))
 		filesToDelete = append(filesToDelete, deletepacer.ObsoleteFile{
 			FileType: base.FileTypeLog,
 			FS:       f.FS,
@@ -337,6 +323,34 @@ func (d *DB) deleteObsoleteFiles(jobID JobID) {
 		d.fileCache.Evict(f.FileNum, base.FileTypeBlob)
 	}
 	if len(filesToDelete) > 0 {
+		for i := range filesToDelete {
+			f := &filesToDelete[i]
+
+			//go func(str string) {
+			//	for i := 0; ; i++ {
+			//		if v := invariants.TestString(str); v >= 0 {
+			//			fmt.Printf("!!!!!!\npoison test: %p %d\n!!!!!!\n", unsafe.StringData(f.Path), v)
+			//			os.Exit(100)
+			//		}
+			//		runtime.Gosched()
+			//	}
+			//}(f.Path)
+
+			//b := manual.New(manual.BlockCacheEntry, uintptr(len(f.Path)))
+			//copy(b.Slice(), f.Path)
+			//f.Path = unsafe.String(&b.Slice()[0], len(f.Path))
+			//f.Path = strings.Clone(f.Path)
+			//x := new([100]byte)
+			//_ = append(x[:0], f.Path...)
+			//f.Path = unsafe.String(&x[0], len(f.Path))
+			//runtime.SetFinalizer(x, func(x *[100]byte) {
+			//	fmt.Printf("finalizer %p\n", x)
+			//})
+			if v := invariants.TestString(f.Path); v >= 0 {
+				fmt.Printf("!!!!!!\npoison test: %p %d\n!!!!!!\n", unsafe.StringData(f.Path), v)
+			}
+			fmt.Printf("file to delete %s %p %d\n", f.Path, unsafe.StringData(f.Path), len(f.Path))
+		}
 		d.deletePacer.Enqueue(int(jobID), filesToDelete...)
 	}
 	if d.opts.private.testingAlwaysWaitForCleanup {

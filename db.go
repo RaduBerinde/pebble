@@ -1479,6 +1479,10 @@ func (d *DB) NewEventuallyFileOnlySnapshot(keyRanges []KeyRange) *EventuallyFile
 // or to call Close concurrently with any other DB method. It is not valid
 // to call any of a DB's methods after the DB has been closed.
 func (d *DB) Close() error {
+	fmt.Printf("Close()\n")
+	time.Sleep(20 * time.Millisecond)
+	//time.Sleep(5 * time.Second)
+	//fmt.Printf("Proceeding with Close\n")
 	if err := d.closed.Load(); err != nil {
 		panic(err)
 	}
@@ -1522,6 +1526,7 @@ func (d *DB) Close() error {
 
 	defer d.cacheHandle.Close()
 
+	fmt.Printf("Close: wait for compactions and such\n")
 	for d.mu.compact.compactingCount > 0 || d.mu.compact.downloadingCount > 0 || d.mu.compact.flushing {
 		d.mu.compact.cond.Wait()
 	}
@@ -1531,6 +1536,7 @@ func (d *DB) Close() error {
 	for d.mu.tableValidation.validating {
 		d.mu.tableValidation.cond.Wait()
 	}
+	fmt.Printf("Close: done waiting for compactions and such\n")
 
 	var err error
 	if n := len(d.mu.compact.inProgress); n > 0 {
@@ -1585,10 +1591,13 @@ func (d *DB) Close() error {
 	// Since we called d.readState.val.unrefLocked() above, we are expected to
 	// manually schedule deletion of obsolete files.
 	if len(d.mu.versions.obsoleteTables) > 0 || len(d.mu.versions.obsoleteBlobs) > 0 {
+		fmt.Printf("Close: deleteObsoleteFiles\n")
 		d.deleteObsoleteFiles(d.newJobIDLocked())
 	}
 
 	d.mu.Unlock()
+
+	fmt.Printf("Closing delete pacer\n")
 
 	// Wait for all cleaning jobs to finish.
 	d.deletePacer.Close()

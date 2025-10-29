@@ -63,7 +63,7 @@ func TestMetaTwoInstance(t *testing.T) {
 }
 
 func TestMetaCockroachKVs(t *testing.T) {
-	defer leaktest.AfterTest(t)()
+	//defer leaktest.AfterTest(t)()
 	runTestMeta(t, metamorphic.CockroachKeyFormat)
 }
 

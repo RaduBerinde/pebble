@@ -107,6 +107,7 @@ package record
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"math"
 
@@ -738,6 +739,7 @@ func (w *Writer) fillHeader(last bool) {
 // writeBlock writes the buffered block to the underlying writer, and reserves
 // space for the next chunk's header.
 func (w *Writer) writeBlock() {
+	fmt.Printf("record.Writer writeBlock\n")
 	_, w.err = w.w.Write(w.buf[w.written:])
 	w.i = 0
 	w.j = legacyHeaderSize
@@ -866,6 +868,7 @@ type singleWriter struct {
 }
 
 func (x singleWriter) Write(p []byte) (int, error) {
+	fmt.Printf("record.singleWriter.Write %p .. %p\n", &p[0], &p[len(p)-1])
 	w := x.w
 	if w.seq != x.seq {
 		return 0, errors.New("pebble/record: stale writer")
@@ -886,6 +889,7 @@ func (x singleWriter) Write(p []byte) (int, error) {
 		}
 		// Copy bytes into the buffer.
 		n := copy(w.buf[w.j:], p)
+		fmt.Printf("record.singleWriter wrote to %p .. %p\n", &w.buf[w.j], &w.buf[w.j+n-1])
 		w.j += n
 		p = p[n:]
 	}

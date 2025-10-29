@@ -1,0 +1,114 @@
+name: msan repro pebble pkg
+
+on:
+  workflow_call:
+    inputs:
+      sha:
+        description: 'SHA to run against'
+        required: false
+        type: string
+      file_issue_branch:
+        description: 'Branch used in filed issues; if unset, no issues are filed'
+        required: false
+        type: string
+      go_version:
+        description: 'Go version'
+        required: false
+        default: '1.23'
+        type: string
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'SHA to run against'
+        required: false
+        type: string
+      file_issue_branch:
+        description: 'Branch used in filed issues; if unset, no issues are filed'
+        required: false
+        type: string
+      go_version:
+        description: 'Go version'
+        required: false
+        default: '1.23'
+        type: string
+
+jobs:
+  linux-msan-pebble-pkg-1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' . -v --exec 'stress -maxruns 200'
+
+  linux-msan-pebble-pkg-2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' . -v --exec 'stress -maxruns 200'
+
+  linux-msan-pebble-pkg-3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' . -v --exec 'stress -maxruns 200'
+
+  linux-msan-pebble-pkg-4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' . -v --exec 'stress -maxruns 200'
+
+  linux-msan-pebble-pkg-5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' . -v --exec 'stress -maxruns 200'

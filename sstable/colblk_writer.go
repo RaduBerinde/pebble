@@ -373,6 +373,7 @@ func (w *RawColumnWriter) EncodeSpan(span keyspan.Span) error {
 // responsibility of the caller. S1 is solely the responsibility of the
 // callee.
 func (w *RawColumnWriter) Add(key InternalKey, value []byte, forceObsolete bool) error {
+	//fmt.Printf("add %s %q\n", key, value)
 	switch key.Kind() {
 	case base.InternalKeyKindRangeDelete, base.InternalKeyKindRangeKeySet,
 		base.InternalKeyKindRangeKeyUnset, base.InternalKeyKindRangeKeyDelete:
@@ -425,6 +426,7 @@ func (w *RawColumnWriter) Add(key InternalKey, value []byte, forceObsolete bool)
 func (w *RawColumnWriter) AddWithBlobHandle(
 	key InternalKey, h blob.InlineHandle, attr base.ShortAttribute, forceObsolete bool,
 ) error {
+	//fmt.Printf("add with blob handle %s\n", key)
 	// Blob value handles require at least TableFormatPebblev6.
 	if w.opts.TableFormat <= TableFormatPebblev5 {
 		w.err = errors.Newf("pebble: blob value handles are not supported in %s", w.opts.TableFormat.String())

@@ -843,6 +843,8 @@ func ParseVersionEditDebug(s string) (_ *VersionEdit, err error) {
 
 // Encode encodes an edit to the specified writer.
 func (v *VersionEdit) Encode(w io.Writer) error {
+	fmt.Printf("Encode start\n")
+	time.Sleep(time.Millisecond)
 	e := versionEditEncoder{new(bytes.Buffer)}
 
 	if v.ComparerName != "" {
@@ -999,7 +1001,9 @@ func (v *VersionEdit) Encode(w io.Writer) error {
 		e.writeUvarint(uint64(entry.Level))
 		e.writeUvarint(uint64(entry.TableNum))
 	}
-	_, err := w.Write(e.Bytes())
+	d := e.Bytes()
+	fmt.Printf("done encoding %p .. %p\n", &d[0], &d[len(d)-1])
+	_, err := w.Write(d)
 	return err
 }
 

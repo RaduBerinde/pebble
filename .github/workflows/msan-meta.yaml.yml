@@ -1,0 +1,117 @@
+name: msan meta repro
+
+on:
+#  push:
+#    branches:
+#      - master
+  workflow_call:
+    inputs:
+      sha:
+        description: 'SHA to run against'
+        required: false
+        type: string
+      file_issue_branch:
+        description: 'Branch used in filed issues; if unset, no issues are filed'
+        required: false
+        type: string
+      go_version:
+        description: 'Go version'
+        required: false
+        default: '1.25'
+        type: string
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: 'SHA to run against'
+        required: false
+        type: string
+      file_issue_branch:
+        description: 'Branch used in filed issues; if unset, no issues are filed'
+        required: false
+        type: string
+      go_version:
+        description: 'Go version'
+        required: false
+        default: '1.25'
+        type: string
+
+jobs:
+  linux-msan-meta-1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' ./internal/metamorphic -run TestMetaCockroachKVs/execution/standard-012 -timeout 0 -seed 1761783263055365392 -v --exec 'stress -p 20 -maxruns 5000'
+
+  linux-msan-meta-2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' ./internal/metamorphic -run TestMetaCockroachKVs/execution/standard-012 -timeout 0 -seed 1761783263055365392 -v --exec 'stress -p 20 -maxruns 5000'
+
+  linux-msan-meta-3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' ./internal/metamorphic -run TestMetaCockroachKVs/execution/standard-012 -timeout 0 -seed 1761783263055365392 -v --exec 'stress -p 20 -maxruns 5000'
+
+  linux-msan-meta-4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' ./internal/metamorphic -run TestMetaCockroachKVs/execution/standard-012 -timeout 0 -seed 1761783263055365392 -v --exec 'stress -p 20 -maxruns 5000'
+
+  linux-msan-meta-5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: go install github.com/cockroachdb/stress@latest
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' ./internal/metamorphic -run TestMetaCockroachKVs/execution/standard-012 -timeout 0 -seed 1761783263055365392 -v --exec 'stress -p 20 -maxruns 5000'

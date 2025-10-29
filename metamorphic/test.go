@@ -96,7 +96,7 @@ func (t *Test) init(
 	} else {
 		t.writeOpts = pebble.NoSync
 	}
-	testOpts.Opts.WithFSDefaults()
+	//testOpts.Opts.WithFSDefaults()
 	t.opts = testOpts.Opts.Clone()
 	t.opts.EnsureDefaults()
 	t.opts.Logger = h
@@ -428,6 +428,12 @@ func (t *Test) step(h *history, optionalRecordf func(string, ...interface{})) bo
 // runOp runs t.ops[idx] with t.opTimeout.
 func (t *Test) runOp(idx int, h historyRecorder) {
 	op := t.ops[idx]
+	//switch op.(type) {
+	//case *iterSeekGEOp, *iterSeekLTOp, *iterSeekPrefixGEOp:
+	//	deletepacer.FooMu.Lock()
+	//	defer deletepacer.FooMu.Unlock()
+	//}
+	fmt.Printf("  - %s\n", op.formattedString(t.testOpts.KeyFormat))
 	var timer *time.Timer
 	if t.opTimeout > 0 {
 		opTimeout := t.opTimeout

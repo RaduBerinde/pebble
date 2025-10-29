@@ -7,7 +7,6 @@ package manual
 // #include <stdlib.h>
 import "C"
 import (
-	"math/rand/v2"
 	"unsafe"
 
 	"github.com/cockroachdb/pebble/internal/invariants"
@@ -33,11 +32,14 @@ func throw(s string)
 //
 // TODO(jackson): Confirm that the race detector does not detect races within
 // cgo-allocated memory.
-var useGoAllocation = invariants.RaceEnabled && rand.Uint32()%2 == 0
+// var useGoAllocation = invariants.RaceEnabled && rand.Uint32()%2 == 0
+var useGoAllocation = false
 
 // TODO(peter): Rather than relying an C malloc/free, we could fork the Go
 // runtime page allocator and allocate large chunks of memory using mmap or
 // similar.
+
+const padding = 128
 
 // New allocates a slice of size n. The returned slice is from manually
 // managed memory and MUST be released by calling Free. Failure to do so will
@@ -51,7 +53,7 @@ func New(purpose Purpose, n uintptr) Buf {
 	// In race-enabled builds, we sometimes make allocations using Go to allow
 	// the race detector to observe concurrent memory access to memory allocated
 	// by this package. See the definition of useGoAllocation for more details.
-	if invariants.RaceEnabled && useGoAllocation {
+	if useGoAllocation {
 		b := make([]byte, n)
 		return Buf{data: unsafe.Pointer(&b[0]), n: n}
 	}
@@ -67,14 +69,18 @@ func New(purpose Purpose, n uintptr) Buf {
 	//   passing uninitialized C memory to Go code if the Go code is going to
 	//   store pointer values in it. Zero out the memory in C before passing it
 	//   to Go.
-	ptr := C.calloc(C.size_t(n), 1)
+	ptr := C.calloc(C.size_t(padding+n+padding), 1)
 	if ptr == nil {
 		// NB: throw is like panic, except it guarantees the process will be
 		// terminated. The call below is exactly what the Go runtime invokes when
 		// it cannot allocate memory.
 		throw("out of memory")
 	}
-	return Buf{data: ptr, n: n}
+	for i := 0; i < padding; i++ {
+		*(*byte)(unsafe.Add(ptr, uintptr(i))) = 0xCC
+		*(*byte)(unsafe.Add(ptr, padding+n+uintptr(i))) = 0xCC
+	}
+	return Buf{data: unsafe.Add(ptr, padding), n: n}
 }
 
 // Free frees the specified slice. It has to be exactly the slice that was
@@ -84,8 +90,17 @@ func Free(purpose Purpose, b Buf) {
 		invariants.MaybeMangle(b.Slice())
 		recordFree(purpose, b.n)
 
-		if !invariants.RaceEnabled || !useGoAllocation {
-			C.free(b.data)
+		if !useGoAllocation {
+			ptr := unsafe.Pointer(uintptr(b.data) - padding)
+			for i := 0; i < padding; i++ {
+				if *(*byte)(unsafe.Add(ptr, i)) != 0xCC {
+					throw("padding before modified")
+				}
+				if *(*byte)(unsafe.Add(ptr, padding+b.n+uintptr(i))) != 0xCC {
+					throw("padding after modified")
+				}
+			}
+			C.free(ptr)
 		}
 	}
 }

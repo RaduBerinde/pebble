@@ -14,7 +14,7 @@ on:
       go_version:
         description: 'Go version'
         required: false
-        default: '1.25'
+        default: '1.23'
         type: string
   workflow_dispatch:
     inputs:
@@ -29,12 +29,11 @@ on:
       go_version:
         description: 'Go version'
         required: false
-        default: '1.25'
+        default: '1.23'
         type: string
 
 jobs:
-  linux-race:
-    name: linux-race
+  linux-msan-meta:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,19 +45,10 @@ jobs:
         with:
           go-version: ${{ inputs.go_version }}
 
-      - run: GOTRACEBACK=all make testrace TAGS=
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: CC=clang go test -msan -tags 'invariants slowbuild' ./internal/metamorphic -run TestMetaCockroachKVs/execution/standard-012 -timeout 0 -v --exec 'stress -p 20 --maxruns 2000'
 
-      - name: Post issue on failure
-        if: failure() && inputs.file_issue_branch != ''
-        id: create-or-update-unique-issue
-        uses: ./.github/actions/post-issue
-        with:
-          title: "${{ inputs.file_issue_branch }}: nightly ${{ github.job }} failed"
-          body: "The nightly ${{ github.job }} test run failed on ${{ inputs.sha }} (go${{ inputs.go_version }}). Please review the run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
-          labels: "C-test-failure"
-
-  linux-asan:
-    name: linux-asan
+  linux-msan-1:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -70,38 +60,298 @@ jobs:
         with:
           go-version: ${{ inputs.go_version }}
 
-      - run: make testasan
-
-      - name: Post issue on failure
-        if: failure() && inputs.file_issue_branch != ''
-        id: create-or-update-unique-issue
-        uses: ./.github/actions/post-issue
-        with:
-          title: "${{ inputs.file_issue_branch }}: nightly ${{ github.job }} failed"
-          body: "The nightly ${{ github.job }} test run failed on ${{ inputs.sha }} (go${{ inputs.go_version }}). Please review the run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
-          labels: "C-test-failure"
-
-  linux-msan:
-    name: linux-msan
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.sha || github.sha }}
-
-      - name: Set up Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: ${{ inputs.go_version }}
-
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
       - run: make testmsan
 
-      - name: Post issue on failure
-        if: failure() && inputs.file_issue_branch != ''
-        id: create-or-update-unique-issue
-        uses: ./.github/actions/post-issue
+  linux-msan-2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
-          title: "${{ inputs.file_issue_branch }}: nightly ${{ github.job }} failed"
-          body: "The nightly ${{ github.job }} test run failed on ${{ inputs.sha }} (go${{ inputs.go_version }}). Please review the run [here](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})."
-          labels: "C-test-failure"
+          ref: ${{ inputs.sha || github.sha }}
 
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-3:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-5:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+
+  linux-msan-6:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-7:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+
+  linux-msan-8:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+
+  linux-msan-9:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+
+  linux-msan-10:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-11:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-12:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-13:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-14:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-15:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+
+  linux-msan-16:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+  linux-msan-17:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+
+  linux-msan-18:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+
+  linux-msan-19:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan
+
+
+  linux-msan-20:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: ${{ inputs.go_version }}
+
+      - run: echo '## ${{ inputs.sha }}' >> $GITHUB_STEP_SUMMARY
+      - run: make testmsan

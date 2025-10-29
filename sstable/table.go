@@ -70,6 +70,8 @@ package sstable // import "github.com/cockroachdb/pebble/sstable"
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
+	"runtime/debug"
 
 	"github.com/cockroachdb/errors"
 	"github.com/cockroachdb/pebble/internal/base"
@@ -302,6 +304,8 @@ func readFooter(
 	logger base.LoggerAndTracer,
 	fileNum base.DiskFileNum,
 ) (footer, error) {
+	//deletepacer.FooMu.Lock()
+	//defer deletepacer.FooMu.Unlock()
 	var err error
 	size := f.Size()
 	if size < minFooterLen {
@@ -314,6 +318,8 @@ func readFooter(
 		off = 0
 		buf = buf[:size]
 	}
+	debug.PrintStack()
+	fmt.Printf("reading footer into %p .. %p\n", &buf[0], &buf[len(buf)-1])
 	buf, err = block.ReadRaw(ctx, f, readHandle, logger, fileNum, buf, off)
 	if err != nil {
 		return footer{}, err

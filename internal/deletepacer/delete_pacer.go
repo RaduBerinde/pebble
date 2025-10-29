@@ -5,13 +5,17 @@
 package deletepacer
 
 import (
+	"bytes"
+	"encoding/base64"
 	"fmt"
 	"runtime"
+	"runtime/trace"
+	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/cockroachdb/crlib/crtime"
-	"github.com/cockroachdb/crlib/fifo"
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/metrics"
@@ -54,7 +58,7 @@ type DeletePacer struct {
 	mu struct {
 		sync.Mutex
 
-		queue             fifo.Queue[queueEntry]
+		queue             Queue
 		queuedPacingBytes uint64
 		// queuedHistory keeps track of pacing bytes added to the queue within the
 		// last 5 minutes.
@@ -100,7 +104,7 @@ func Open(
 		deleteFn:        deleteFn,
 		notifyCh:        make(chan struct{}, 1),
 	}
-	dp.mu.queue = fifo.MakeQueue(&queueBackingPool)
+	dp.mu.queue = MakeQueue()
 	dp.mu.queuedHistory.Init(crtime.NowMono(), RecentRateWindow)
 	dp.mu.deletedCond.L = &dp.mu.Mutex
 	dp.waitGroup.Add(1)
@@ -112,8 +116,6 @@ func Open(
 	go dp.mainLoop()
 	return dp
 }
-
-var queueBackingPool = fifo.MakeQueueBackingPool[queueEntry]()
 
 type queueEntry struct {
 	ObsoleteFile
@@ -135,6 +137,22 @@ func (dp *DeletePacer) Close() {
 	dp.waitGroup.Wait()
 }
 
+var traceBuf bytes.Buffer
+
+func printTraceBuf() {
+	data := traceBuf.Bytes()
+	b64 := base64.StdEncoding.EncodeToString(data)
+
+	// Use printf instead of echo to avoid adding a newline or interpreting escapes.
+	// Linux (GNU coreutils):
+	//fmt.Println("# Linux:")
+	//fmt.Printf("printf %%s '%s' | base64 -d > %q\n\n", b64, out)
+
+	//// macOS (BSD base64 uses -D for decode):
+	//fmt.Println("# macOS:")
+	fmt.Printf("printf %%s '%s' | base64 -D > trace.out\n\n", b64)
+}
+
 // mainLoop is the background goroutine that processes the delete queue.
 //
 // We keep track of a pacing rate in bytes/sec. When we delete a file, we add its
@@ -149,7 +167,9 @@ func (dp *DeletePacer) Close() {
 //   - the backlog (deletions that have been in the queue for more than 5 minutes);
 //   - whether we are running low on free space.
 func (dp *DeletePacer) mainLoop() {
-	stackBuf := make([]byte, 1<<20)
+	//var traceBuf bytes.Buffer
+	//traceBuf.Grow(10 << 20)
+	//stack1 := make([]byte, 1<<20)
 	defer dp.waitGroup.Done()
 
 	timer := time.NewTimer(time.Duration(0))
@@ -174,6 +194,7 @@ func (dp *DeletePacer) mainLoop() {
 				dp.logger.Errorf("excessive delete pacer queue size %d; pacing temporarily disabled", dp.mu.queue.Len())
 			}
 		}
+		disablePacing = true
 
 		rateCalc.Update(now, dp.mu.queuedHistory.Sum(now), dp.mu.queuedPacingBytes, disablePacing)
 
@@ -208,11 +229,41 @@ func (dp *DeletePacer) mainLoop() {
 			dp.mu.Lock()
 
 		default:
+			//runtime.GC()   // No longer reproduces with this.
 			// Delete a file.
-			file := *dp.mu.queue.PeekFront()
+			//file := *dp.mu.queue.PeekFront()
+			file := dp.mu.queue.Front()
+			//runtime.GC()   // No longer reproduces with this.
+			//for i := 0; i < 1000; i++ {
+			//	//stack1 = stack1[:runtime.Stack(stack1[:cap(stack1)], true)]
+			//	runtime.Gosched()
+			//	if invariants.TestString(file.Path) >= 0 {
+			//		fmt.Printf("BEFORE POP POISON! (iteration %d) [%p, %d)\n", i, unsafe.StringData(file.Path), len(file.Path))
+			//		fmt.Printf("path clone: %s\n", strings.Clone(file.Path))
+			//
+			//		//fmt.Printf("\n\n***************** STACK BEFORE *****************\n\n")
+			//		//fmt.Printf("%s", stack1)
+			//		//fmt.Printf("\n\n***************** STACK BEFORE END *************\n\n")
+			//
+			//		fmt.Printf("path: %s\n", file.Path)
+			//	}
+			//}
 			//fmt.Printf("peek %p\n", unsafe.StringData(file.Path))
 			//fmt.Printf("1: %s\n", file.Path)
 			dp.mu.queue.PopFront()
+			fmt.Printf("\n\npopped\n")
+			//v := strings.Clone(file.Path)
+			//for i := 0; i < 10000; i++ {
+			//	runtime.GC()
+			//	if v != file.Path {
+			//		fmt.Printf("!!!!!!!!!!!!!!!!!!!  v: %q  file.Path: %q\n", v, file.Path)
+			//		panic(fmt.Sprintf("!!!!!!!!!!!!!!!!!!!  v: %q  file.Path: %q\n", v, file.Path))
+			//	}
+			//}
+			//runtime.GC()
+			fmt.Printf("\n\nGC after pop done\n")
+			//stack1 = stack1[:runtime.Stack(stack1[:cap(stack1)], true)]
+			//fmt.Printf("popped %p\n", unsafe.StringData(file.Path))
 			//fmt.Printf("2: %s\n", file.Path)
 			if b := file.pacingBytes(); b != 0 {
 				dp.mu.queuedPacingBytes = invariants.SafeSub(dp.mu.queuedPacingBytes, b)
@@ -220,23 +271,70 @@ func (dp *DeletePacer) mainLoop() {
 			}
 			//fmt.Printf("3: %s\n", file.Path)
 			//fmt.Printf("before unlock: %p\n", unsafe.StringData(file.Path))
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						fmt.Println(r)
-						panic(r)
+			//func() {
+			//	defer func() {
+			//		if r := recover(); r != nil {
+			//			fmt.Println(r)
+			//			panic(r)
+			//		}
+			//	}()
+			//	n := runtime.Stack(stackBuf, true)
+			//	fmt.Printf("FOO-START\n%sFOO-END\n", stackBuf[:n])
+			//}()
+			//traceBuf.Reset()
+			//trace.Start(&traceBuf)
+			//defer trace.Stop()
+
+			//runtime.MSanRead(unsafe.Pointer(unsafe.StringData(file.Path)), len(file.Path))
+			for i := 0; i < 10000; i++ {
+				//stack1 = stack1[:runtime.Stack(stack1[:cap(stack1)], true)]
+				runtime.Gosched()
+				if invariants.TestString(file.Path) >= 0 {
+					trace.Stop()
+					stopTheWorld(0)
+
+					fmt.Printf("LOCKED POISON! (iteration %d) [%p, %d)\n", i, unsafe.StringData(file.Path), len(file.Path))
+					printTraceBuf()
+
+					fmt.Printf("string char by char:")
+					for j := 0; j < len(file.Path); j++ {
+						fmt.Printf("%c", file.Path[j])
 					}
-				}()
-				n := runtime.Stack(stackBuf, true)
-				fmt.Printf("FOO-START\n%sFOO-END\n", stackBuf[:n])
-			}()
+					fmt.Printf("\n")
+
+					//stack1 = stack1[:runtime.Stack(stack1[:cap(stack1)], true)]
+					//fmt.Printf("\n\n***************** STACK@popped *****************\n\n")
+					//fmt.Printf("%s", stack1)
+					//fmt.Printf("\n\n***************** STACK END *************\n\n")
+
+					fmt.Printf("path clone: %s\n\n\n", strings.Clone(file.Path))
+					fmt.Printf("path: %s\n", file.Path)
+				}
+			}
 			func() {
 				dp.mu.Unlock()
 				defer dp.mu.Lock()
-				fmt.Printf("4: %s\n", file.Path)
-				fmt.Printf("delete start\n")
+				for i := 0; i < 1000; i++ {
+					//stack1 = stack1[:runtime.Stack(stack1[:cap(stack1)], true)]
+					runtime.Gosched()
+					if invariants.TestString(file.Path) >= 0 {
+						trace.Stop()
+						//os.WriteFile("/tmp/trace", traceBuf.Bytes(), 0666)
+
+						fmt.Printf("AFTER UNLOCK POISON! (iteration %d) [%p, %d)\n", i, unsafe.StringData(file.Path), len(file.Path))
+						fmt.Printf("path clone: %s\n\n\n", strings.Clone(file.Path))
+
+						//fmt.Printf("\n\n***************** STACK BEFORE *****************\n\n")
+						//fmt.Printf("%s", stack1)
+						//fmt.Printf("\n\n***************** STACK BEFORE END *************\n\n")
+
+						fmt.Printf("path: %s\n", file.Path)
+					}
+				}
+				fmt.Printf("path %p %d\n", unsafe.StringData(file.Path), len(file.Path))
+				fmt.Printf("path clone: %s\n\n\n", strings.Clone(file.Path))
+				fmt.Printf("path: %s\n", file.Path)
 				dp.deleteFn(file.ObsoleteFile, file.JobID)
-				fmt.Printf("delete end\n")
 			}()
 			dp.mu.metrics.InQueue.Dec(file.FileType, file.FileSize, file.IsLocal)
 			dp.mu.metrics.Deleted.Inc(file.FileType, file.FileSize, file.IsLocal)
@@ -255,6 +353,15 @@ func (dp *DeletePacer) Enqueue(jobID int, files ...ObsoleteFile) {
 		}
 		return
 	}
+	if dp.mu.queue.Len() == 0 {
+		trace.Start(&traceBuf)
+		//go func() {
+		//	for {
+		//		runtime.GC()
+		//		runtime.Gosched()
+		//	}
+		//}()
+	}
 	now := crtime.NowMono()
 	for _, file := range files {
 		if b := file.pacingBytes(); b > 0 {
@@ -262,6 +369,7 @@ func (dp *DeletePacer) Enqueue(jobID int, files ...ObsoleteFile) {
 			dp.mu.queuedHistory.Add(now, b)
 		}
 		dp.mu.metrics.InQueue.Inc(file.FileType, file.FileSize, file.IsLocal)
+		fmt.Printf("\nPushBack %p %s\n", unsafe.StringData(file.Path), file.Path)
 		dp.mu.queue.PushBack(queueEntry{
 			ObsoleteFile: file,
 			JobID:        jobID,
@@ -304,4 +412,16 @@ func (dp *DeletePacer) WaitForTesting() {
 	for dp.mu.metrics.Deleted.Totals().Count < n {
 		dp.mu.deletedCond.Wait()
 	}
+}
+
+//go:linkname stopTheWorld runtime.stopTheWorld
+func stopTheWorld(reason stwReason) worldStop
+
+type stwReason uint8
+
+type worldStop struct {
+	reason           stwReason
+	startedStopping  int64
+	finishedStopping int64
+	stoppingCPUTime  int64
 }

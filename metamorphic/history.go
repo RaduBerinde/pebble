@@ -97,10 +97,11 @@ func (h *history) format(typ, format string, args ...interface{}) string {
 func (h *history) Infof(format string, args ...interface{}) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	fmt.Printf(" - "+format+"\n", args...)
 	// Suppress any messages that come after closing. This could happen if the
 	// test doesn't close the database.
 	if !h.mu.closed {
-		_ = h.log.Output(2, h.format("INFO", format, args...))
+		_ = h.log.Output(2, h.format("INFO", "  - "+format, args...))
 	}
 }
 
@@ -109,6 +110,7 @@ func (h *history) Infof(format string, args ...interface{}) {
 func (h *history) Errorf(format string, args ...interface{}) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	fmt.Printf(" - "+format+"\n", args...)
 	// Suppress any messages that come after closing. This could happen if the
 	// test doesn't close the database.
 	if !h.mu.closed {
@@ -121,6 +123,7 @@ func (h *history) Errorf(format string, args ...interface{}) {
 func (h *history) Fatalf(format string, args ...interface{}) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	fmt.Printf(" - "+format+"\n", args...)
 	if h.mu.closed {
 		panic(fmt.Sprintf(format, args...))
 	}

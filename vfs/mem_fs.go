@@ -816,6 +816,7 @@ func (f *memFile) Write(p []byte) (int, error) {
 		}
 		f.n.mu.data = append(f.n.mu.data[:f.pos], p...)
 	}
+	fmt.Printf("wrote buf %p .. %p to %p .. %p\n", &p[0], &p[len(p)-1], &f.n.mu.data[f.pos], &f.n.mu.data[f.pos+len(p)-1])
 	f.pos += len(p)
 
 	if invariants.Enabled {

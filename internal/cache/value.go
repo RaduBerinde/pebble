@@ -6,7 +6,6 @@ package cache
 
 import (
 	"fmt"
-	"math/rand/v2"
 	"os"
 	"unsafe"
 
@@ -45,7 +44,8 @@ type Value struct {
 // code blocks.
 const valueEntryCanBeGoAllocated = !buildtags.Cgo || invariants.UseFinalizers
 
-var valueEntryGoAllocated = !buildtags.Cgo || (invariants.UseFinalizers && rand.IntN(2) == 0)
+// var valueEntryGoAllocated = !buildtags.Cgo || (invariants.UseFinalizers && rand.IntN(2) == 0)
+var valueEntryGoAllocated = true
 
 // Alloc allocates a byte slice of the specified size, possibly reusing
 // previously allocated but unused memory. The memory backing the value is

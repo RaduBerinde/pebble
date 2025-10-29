@@ -715,6 +715,9 @@ func (kw *cockroachKeyWriter) Size(rows int, offset uint32) uint32 {
 func (kw *cockroachKeyWriter) Finish(
 	col int, rows int, offset uint32, buf []byte,
 ) (endOffset uint32) {
+	defer func() {
+		fmt.Printf("crkeywriter.Finish(offset=%d), %p .. %p  endOffset=%d\n", offset, &buf[0], &buf[endOffset-1], endOffset)
+	}()
 	switch col {
 	case cockroachColRoachKey:
 		return kw.roachKeys.Finish(0, rows, offset, buf)
