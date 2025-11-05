@@ -11,9 +11,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/cockroachdb/pebble/internal/base"
-	"github.com/cockroachdb/pebble/internal/testutils"
 )
 
 func TestFoo(t *testing.T) {
@@ -28,9 +25,8 @@ func runOne(t *testing.T) {
 		BacklogTimeframe:   50 * time.Minute,
 		BaselineRate:       func() uint64 { return 1000000 },
 	}
-	deleteFn := func(of ObsoleteFile, jobID int) {
-	}
-	dp := Open(opts, testutils.Logger{T: t}, func() uint64 { return 1 << 30 }, deleteFn)
+	deleteFn := func(of ObsoleteFile, jobID int) {}
+	dp := Open(opts, deleteFn)
 	defer dp.Close()
 
 	var wg sync.WaitGroup
@@ -44,7 +40,7 @@ func runOne(t *testing.T) {
 			if enqueue {
 				time.Sleep(time.Duration(rng.Intn(10_000)))
 				dp.Enqueue(1, ObsoleteFile{
-					FileType: base.FileTypeTable,
+					FileType: FileTypeTable,
 					Path:     fmt.Sprintf("this is some string %d", rng.Intn(1000)),
 					FileSize: 1000,
 					IsLocal:  false,

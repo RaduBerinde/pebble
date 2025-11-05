@@ -16,15 +16,7 @@ import (
 	"unsafe"
 
 	"github.com/cockroachdb/crlib/crtime"
-	"github.com/cockroachdb/pebble/internal/base"
-	"github.com/cockroachdb/pebble/internal/invariants"
-	"github.com/cockroachdb/pebble/metrics"
 )
-
-// DiskFreeSpaceFn returns the current amount of free space on the disk in
-// bytes. This is used to determine whether the deletion rate needs to be
-// increased to prevent running out of disk space.
-type DiskFreeSpaceFn func() uint64
 
 // DeleteFn is called to perform the actual deletion of an obsolete file. It
 // should not panic. Any errors must be handled internally. The delete pacer
@@ -50,9 +42,8 @@ type DeleteFn func(of ObsoleteFile, jobID int)
 // DeletePacer is safe for concurrent use. It must be created with Open() and
 // closed with Close().
 type DeletePacer struct {
-	opts            Options
-	diskFreeSpaceFn DiskFreeSpaceFn
-	deleteFn        DeleteFn
+	opts     Options
+	deleteFn DeleteFn
 
 	mu struct {
 		sync.Mutex
@@ -92,18 +83,14 @@ const maxQueueSize = 1000
 
 // Open creates a DeletePacer and starts its background goroutine.
 // The DeletePacer must be Close()d.
-func Open(
-	opts Options, logger base.Logger, diskFreeSpaceFn DiskFreeSpaceFn, deleteFn DeleteFn,
-) *DeletePacer {
+func Open(opts Options, deleteFn DeleteFn) *DeletePacer {
 	opts.EnsureDefaults()
 	dp := &DeletePacer{
-		opts:            opts,
-		diskFreeSpaceFn: diskFreeSpaceFn,
-		deleteFn:        deleteFn,
-		notifyCh:        make(chan struct{}, 1),
+		opts:     opts,
+		deleteFn: deleteFn,
+		notifyCh: make(chan struct{}, 1),
 	}
 	dp.mu.queue = MakeQueue()
-	dp.mu.queuedHistory.Init(crtime.NowMono(), RecentRateWindow)
 	dp.mu.deletedCond.L = &dp.mu.Mutex
 	dp.waitGroup.Add(1)
 	//go func() {
@@ -173,8 +160,6 @@ func (dp *DeletePacer) mainLoop() {
 	timer := time.NewTimer(time.Duration(0))
 	defer timer.Stop()
 
-	//rateCalc := makeRateCalculator(&dp.opts, dp.diskFreeSpaceFn, crtime.NowMono())
-
 	var lastMaxQueueLog crtime.Mono
 	dp.mu.Lock()
 	defer dp.mu.Unlock()
@@ -183,18 +168,12 @@ func (dp *DeletePacer) mainLoop() {
 			return
 		}
 		now := crtime.NowMono()
-		disablePacing := dp.mu.closed
 		if dp.mu.queue.Len() > maxQueueSize {
 			// The queue is getting out of hand; disable pacing.
-			disablePacing = true
 			if lastMaxQueueLog == 0 || now.Sub(lastMaxQueueLog) > time.Minute {
 				lastMaxQueueLog = now
 			}
 		}
-		disablePacing = true
-
-		_ = disablePacing
-		//rateCalc.Update(now, dp.mu.queuedHistory.Sum(now), dp.mu.queuedPacingBytes, disablePacing)
 
 		// Processing priority:
 		//   1. Exit if closed and queue empty;
@@ -208,23 +187,6 @@ func (dp *DeletePacer) mainLoop() {
 			<-dp.notifyCh
 			fmt.Printf("notification wait end\n")
 			dp.mu.Lock()
-
-		//case rateCalc.InDebt():
-		//	// We have files in the queue but we must wait.
-		//	dp.mu.Unlock()
-		//	waitTime := rateCalc.DebtWaitTime()
-		//	// Don't wait more than 10 seconds; we want a chance to recalculate the
-		//	// rate (and check if we're running low on free space).
-		//	waitTime = min(waitTime, 10*time.Second)
-		//	timer.Reset(waitTime)
-		//	fmt.Printf("timer wait start\n")
-		//	select {
-		//	case <-timer.C:
-		//	case <-dp.notifyCh:
-		//		timer.Stop()
-		//	}
-		//	fmt.Printf("timer wait stop\n")
-		//	dp.mu.Lock()
 
 		default:
 			//runtime.GC()   // No longer reproduces with this.
@@ -263,10 +225,6 @@ func (dp *DeletePacer) mainLoop() {
 			//stack1 = stack1[:runtime.Stack(stack1[:cap(stack1)], true)]
 			//fmt.Printf("popped %p\n", unsafe.StringData(file.Path))
 			//fmt.Printf("2: %s\n", file.Path)
-			if b := file.pacingBytes(); b != 0 {
-				dp.mu.queuedPacingBytes = invariants.SafeSub(dp.mu.queuedPacingBytes, b)
-				//rateCalc.AddDebt(b)
-			}
 			//fmt.Printf("3: %s\n", file.Path)
 			//fmt.Printf("before unlock: %p\n", unsafe.StringData(file.Path))
 			//func() {
@@ -287,9 +245,8 @@ func (dp *DeletePacer) mainLoop() {
 			for i := 0; i < 10000; i++ {
 				//stack1 = stack1[:runtime.Stack(stack1[:cap(stack1)], true)]
 				runtime.Gosched()
-				if invariants.TestString(file.Path) >= 0 {
+				if TestString(file.Path) >= 0 {
 					trace.Stop()
-					stopTheWorld(0)
 
 					fmt.Printf("LOCKED POISON! (iteration %d) [%p, %d)\n", i, unsafe.StringData(file.Path), len(file.Path))
 					//printTraceBuf()
@@ -315,7 +272,7 @@ func (dp *DeletePacer) mainLoop() {
 				for i := 0; i < 1000; i++ {
 					//stack1 = stack1[:runtime.Stack(stack1[:cap(stack1)], true)]
 					runtime.Gosched()
-					if invariants.TestString(file.Path) >= 0 {
+					if TestString(file.Path) >= 0 {
 						trace.Stop()
 						//os.WriteFile("/tmp/trace", traceBuf.Bytes(), 0666)
 
@@ -334,8 +291,6 @@ func (dp *DeletePacer) mainLoop() {
 				fmt.Printf("path: %s\n", file.Path)
 				dp.deleteFn(file.ObsoleteFile, file.JobID)
 			}()
-			dp.mu.metrics.InQueue.Dec(file.FileType, file.FileSize, file.IsLocal)
-			dp.mu.metrics.Deleted.Inc(file.FileType, file.FileSize, file.IsLocal)
 			dp.mu.deletedCond.Broadcast()
 		}
 	}
@@ -346,9 +301,7 @@ func (dp *DeletePacer) Enqueue(jobID int, files ...ObsoleteFile) {
 	dp.mu.Lock()
 	defer dp.mu.Unlock()
 	if dp.mu.closed {
-		if invariants.Enabled {
-			panic("Enqueue called after Close")
-		}
+		panic("Enqueue called after Close")
 		return
 	}
 	if dp.mu.queue.Len() == 0 {
@@ -360,13 +313,7 @@ func (dp *DeletePacer) Enqueue(jobID int, files ...ObsoleteFile) {
 		//	}
 		//}()
 	}
-	now := crtime.NowMono()
 	for _, file := range files {
-		if b := file.pacingBytes(); b > 0 {
-			dp.mu.queuedPacingBytes += b
-			dp.mu.queuedHistory.Add(now, b)
-		}
-		dp.mu.metrics.InQueue.Inc(file.FileType, file.FileSize, file.IsLocal)
 		fmt.Printf("\nPushBack %p %s\n", unsafe.StringData(file.Path), file.Path)
 		dp.mu.queue.PushBack(queueEntry{
 			ObsoleteFile: file,
@@ -379,13 +326,6 @@ func (dp *DeletePacer) Enqueue(jobID int, files ...ObsoleteFile) {
 	}
 }
 
-// Metrics returns the current metrics.
-func (dp *DeletePacer) Metrics() Metrics {
-	dp.mu.Lock()
-	defer dp.mu.Unlock()
-	return dp.mu.metrics
-}
-
 // Metrics tracks statistics about files in the delete pacer queue and files
 // that have been deleted. This provides visibility into deletion throughput and
 // queue depth.
@@ -393,33 +333,9 @@ type Metrics struct {
 	// InQueue contains the count and total size of files currently waiting in the
 	// delete queue, broken down by file type (tables vs blob files) and locality
 	// (all vs local only).
-	InQueue metrics.FileCountsAndSizes
+	InQueue FileCountsAndSizes
 
 	// Deleted contains the count and total size of files that have been deleted
 	// since the DeletePacer was started, broken down by file type and locality.
-	Deleted metrics.FileCountsAndSizes
-}
-
-// WaitForTesting waits until the deletion of all files that were already
-// queued. Does not wait for jobs that are enqueued during the call.
-func (dp *DeletePacer) WaitForTesting() {
-	dp.mu.Lock()
-	defer dp.mu.Unlock()
-
-	n := dp.mu.metrics.Deleted.Totals().Count + dp.mu.metrics.InQueue.Totals().Count
-	for dp.mu.metrics.Deleted.Totals().Count < n {
-		dp.mu.deletedCond.Wait()
-	}
-}
-
-//go:linkname stopTheWorld runtime.stopTheWorld
-func stopTheWorld(reason stwReason) worldStop
-
-type stwReason uint8
-
-type worldStop struct {
-	reason           stwReason
-	startedStopping  int64
-	finishedStopping int64
-	stoppingCPUTime  int64
+	Deleted FileCountsAndSizes
 }

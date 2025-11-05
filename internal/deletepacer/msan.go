@@ -4,7 +4,7 @@
 
 //go:build msan
 
-package invariants
+package deletepacer
 
 /*
 #include <sanitizer/msan_interface.h>

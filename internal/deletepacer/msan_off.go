@@ -4,6 +4,6 @@
 
 //go:build !msan
 
-package invariants
+package deletepacer
 
 func TestString(s string) (firstPoison int) { return -1 }

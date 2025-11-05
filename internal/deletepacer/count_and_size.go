@@ -2,14 +2,9 @@
 // of this source code is governed by a BSD-style license that can be found in
 // the LICENSE file.
 
-package metrics
+package deletepacer
 
-import (
-	"github.com/cockroachdb/crlib/crhumanize"
-	"github.com/cockroachdb/pebble/internal/base"
-	"github.com/cockroachdb/pebble/internal/invariants"
-	"github.com/cockroachdb/redact"
-)
+import "fmt"
 
 // CountAndSize tracks the count and total size of a set of items.
 type CountAndSize struct {
@@ -28,8 +23,8 @@ func (cs *CountAndSize) Inc(fileSize uint64) {
 
 // Dec decreases the count and size for a single item.
 func (cs *CountAndSize) Dec(fileSize uint64) {
-	cs.Count = invariants.SafeSub(cs.Count, 1)
-	cs.Bytes = invariants.SafeSub(cs.Bytes, fileSize)
+	cs.Count = SafeSub(cs.Count, 1)
+	cs.Bytes = SafeSub(cs.Bytes, fileSize)
 }
 
 // Accumulate increases the counts and sizes by the given amounts.
@@ -40,17 +35,8 @@ func (cs *CountAndSize) Accumulate(other CountAndSize) {
 
 // Deduct decreases the counts and sizes by the given amounts.
 func (cs *CountAndSize) Deduct(other CountAndSize) {
-	cs.Count = invariants.SafeSub(cs.Count, other.Count)
-	cs.Bytes = invariants.SafeSub(cs.Bytes, other.Bytes)
-}
-
-func (cs CountAndSize) String() string {
-	return redact.StringWithoutMarkers(cs)
-}
-
-// SafeFormat implements redact.SafeFormatter.
-func (cs CountAndSize) SafeFormat(w redact.SafePrinter, verb rune) {
-	w.Printf("%s (%s)", crhumanize.Count(cs.Count, crhumanize.Compact), crhumanize.Bytes(cs.Bytes, crhumanize.Compact, crhumanize.OmitI))
+	cs.Count = SafeSub(cs.Count, other.Count)
+	cs.Bytes = SafeSub(cs.Bytes, other.Bytes)
 }
 
 // TableCountsAndSizes contains counts and sizes for tables, broken down by
@@ -90,20 +76,6 @@ func (cs *TableCountsAndSizes) Deduct(other TableCountsAndSizes) {
 	cs.Local.Deduct(other.Local)
 }
 
-func (cs TableCountsAndSizes) String() string {
-	return redact.StringWithoutMarkers(cs)
-}
-
-// SafeFormat implements redact.SafeFormatter.
-func (cs TableCountsAndSizes) SafeFormat(w redact.SafePrinter, verb rune) {
-	cs.All.SafeFormat(w, verb)
-	if cs.All != cs.Local {
-		w.Printf(" [local: ")
-		cs.Local.SafeFormat(w, verb)
-		w.Printf("]")
-	}
-}
-
 // BlobFileCountsAndSizes contains counts and sizes for blob files, broken down
 // by locality.
 type BlobFileCountsAndSizes struct {
@@ -141,18 +113,6 @@ func (cs *BlobFileCountsAndSizes) Deduct(other BlobFileCountsAndSizes) {
 	cs.Local.Deduct(other.Local)
 }
 
-func (cs BlobFileCountsAndSizes) String() string {
-	return redact.StringWithoutMarkers(cs)
-}
-
-// SafeFormat implements redact.SafeFormatter.
-func (cs BlobFileCountsAndSizes) SafeFormat(w redact.SafePrinter, verb rune) {
-	cs.All.SafeFormat(w, verb)
-	if cs.All != cs.Local {
-		w.Printf(" [local: %s]", cs.Local)
-	}
-}
-
 // FileCountsAndSizes contains counts and sizes for all file types.
 type FileCountsAndSizes struct {
 	// Tables contains counts and sizes for tables.
@@ -166,7 +126,6 @@ type FileCountsAndSizes struct {
 	Other CountAndSize
 }
 
-// TotalCount returns the total
 func (cs *FileCountsAndSizes) Totals() CountAndSize {
 	res := cs.Tables.All
 	res.Accumulate(cs.BlobFiles.All)
@@ -175,11 +134,11 @@ func (cs *FileCountsAndSizes) Totals() CountAndSize {
 }
 
 // Inc increases the relevant count and size for a single file.
-func (cs *FileCountsAndSizes) Inc(fileType base.FileType, fileSize uint64, isLocal bool) {
+func (cs *FileCountsAndSizes) Inc(fileType FileType, fileSize uint64, isLocal bool) {
 	switch fileType {
-	case base.FileTypeTable:
+	case FileTypeTable:
 		cs.Tables.Inc(fileSize, isLocal)
-	case base.FileTypeBlob:
+	case FileTypeBlob:
 		cs.BlobFiles.Inc(fileSize, isLocal)
 	default:
 		cs.Other.Inc(fileSize)
@@ -187,11 +146,11 @@ func (cs *FileCountsAndSizes) Inc(fileType base.FileType, fileSize uint64, isLoc
 }
 
 // Dec decreases the relevant count and size for a single file.
-func (cs *FileCountsAndSizes) Dec(fileType base.FileType, fileSize uint64, isLocal bool) {
+func (cs *FileCountsAndSizes) Dec(fileType FileType, fileSize uint64, isLocal bool) {
 	switch fileType {
-	case base.FileTypeTable:
+	case FileTypeTable:
 		cs.Tables.Dec(fileSize, isLocal)
-	case base.FileTypeBlob:
+	case FileTypeBlob:
 		cs.BlobFiles.Dec(fileSize, isLocal)
 	default:
 		cs.Other.Dec(fileSize)
@@ -212,33 +171,27 @@ func (cs *FileCountsAndSizes) Deduct(other FileCountsAndSizes) {
 	cs.Other.Deduct(other.Other)
 }
 
-func (cs FileCountsAndSizes) String() string {
-	return redact.StringWithoutMarkers(cs)
+type FileType int
+
+// The FileType enumeration.
+const (
+	FileTypeLog FileType = iota
+	FileTypeLock
+	FileTypeTable
+	FileTypeManifest
+	FileTypeOptions
+	FileTypeOldTemp
+	FileTypeTemp
+	FileTypeBlob
+)
+
+func SafeSub[T Integer](a, b T) T {
+	if a < b {
+		panic(fmt.Sprintf("underflow: %d - %d", a, b))
+	}
+	return a - b
 }
 
-// SafeFormat implements redact.SafeFormatter.
-func (cs FileCountsAndSizes) SafeFormat(w redact.SafePrinter, verb rune) {
-	if cs == (FileCountsAndSizes{}) {
-		w.Printf("no files")
-		return
-	}
-	first := true
-	if cs.Tables != (TableCountsAndSizes{}) {
-		first = false
-		w.Printf("tables: %s", cs.Tables)
-	}
-	if cs.BlobFiles != (BlobFileCountsAndSizes{}) {
-		if !first {
-			w.Printf("; ")
-			first = false
-		}
-		w.Printf("blob files: %s", cs.BlobFiles)
-	}
-	if cs.Other != (CountAndSize{}) {
-		if !first {
-			w.Printf("; ")
-			first = false
-		}
-		w.Printf("other: %s", cs.Other)
-	}
+type Integer interface {
+	~int | ~int8 | ~int16 | ~int32 | ~int64 | ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64 | ~uintptr
 }
