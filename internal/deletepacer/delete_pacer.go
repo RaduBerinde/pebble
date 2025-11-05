@@ -53,7 +53,6 @@ type DeletePacer struct {
 	opts            Options
 	diskFreeSpaceFn DiskFreeSpaceFn
 	deleteFn        DeleteFn
-	logger          base.Logger
 
 	mu struct {
 		sync.Mutex
@@ -99,7 +98,6 @@ func Open(
 	opts.EnsureDefaults()
 	dp := &DeletePacer{
 		opts:            opts,
-		logger:          logger,
 		diskFreeSpaceFn: diskFreeSpaceFn,
 		deleteFn:        deleteFn,
 		notifyCh:        make(chan struct{}, 1),
@@ -175,7 +173,7 @@ func (dp *DeletePacer) mainLoop() {
 	timer := time.NewTimer(time.Duration(0))
 	defer timer.Stop()
 
-	rateCalc := makeRateCalculator(&dp.opts, dp.diskFreeSpaceFn, crtime.NowMono())
+	//rateCalc := makeRateCalculator(&dp.opts, dp.diskFreeSpaceFn, crtime.NowMono())
 
 	var lastMaxQueueLog crtime.Mono
 	dp.mu.Lock()
@@ -191,12 +189,12 @@ func (dp *DeletePacer) mainLoop() {
 			disablePacing = true
 			if lastMaxQueueLog == 0 || now.Sub(lastMaxQueueLog) > time.Minute {
 				lastMaxQueueLog = now
-				dp.logger.Errorf("excessive delete pacer queue size %d; pacing temporarily disabled", dp.mu.queue.Len())
 			}
 		}
 		disablePacing = true
 
-		rateCalc.Update(now, dp.mu.queuedHistory.Sum(now), dp.mu.queuedPacingBytes, disablePacing)
+		_ = disablePacing
+		//rateCalc.Update(now, dp.mu.queuedHistory.Sum(now), dp.mu.queuedPacingBytes, disablePacing)
 
 		// Processing priority:
 		//   1. Exit if closed and queue empty;
@@ -211,22 +209,22 @@ func (dp *DeletePacer) mainLoop() {
 			fmt.Printf("notification wait end\n")
 			dp.mu.Lock()
 
-		case rateCalc.InDebt():
-			// We have files in the queue but we must wait.
-			dp.mu.Unlock()
-			waitTime := rateCalc.DebtWaitTime()
-			// Don't wait more than 10 seconds; we want a chance to recalculate the
-			// rate (and check if we're running low on free space).
-			waitTime = min(waitTime, 10*time.Second)
-			timer.Reset(waitTime)
-			fmt.Printf("timer wait start\n")
-			select {
-			case <-timer.C:
-			case <-dp.notifyCh:
-				timer.Stop()
-			}
-			fmt.Printf("timer wait stop\n")
-			dp.mu.Lock()
+		//case rateCalc.InDebt():
+		//	// We have files in the queue but we must wait.
+		//	dp.mu.Unlock()
+		//	waitTime := rateCalc.DebtWaitTime()
+		//	// Don't wait more than 10 seconds; we want a chance to recalculate the
+		//	// rate (and check if we're running low on free space).
+		//	waitTime = min(waitTime, 10*time.Second)
+		//	timer.Reset(waitTime)
+		//	fmt.Printf("timer wait start\n")
+		//	select {
+		//	case <-timer.C:
+		//	case <-dp.notifyCh:
+		//		timer.Stop()
+		//	}
+		//	fmt.Printf("timer wait stop\n")
+		//	dp.mu.Lock()
 
 		default:
 			//runtime.GC()   // No longer reproduces with this.
@@ -267,7 +265,7 @@ func (dp *DeletePacer) mainLoop() {
 			//fmt.Printf("2: %s\n", file.Path)
 			if b := file.pacingBytes(); b != 0 {
 				dp.mu.queuedPacingBytes = invariants.SafeSub(dp.mu.queuedPacingBytes, b)
-				rateCalc.AddDebt(b)
+				//rateCalc.AddDebt(b)
 			}
 			//fmt.Printf("3: %s\n", file.Path)
 			//fmt.Printf("before unlock: %p\n", unsafe.StringData(file.Path))
@@ -294,7 +292,7 @@ func (dp *DeletePacer) mainLoop() {
 					stopTheWorld(0)
 
 					fmt.Printf("LOCKED POISON! (iteration %d) [%p, %d)\n", i, unsafe.StringData(file.Path), len(file.Path))
-					printTraceBuf()
+					//printTraceBuf()
 
 					fmt.Printf("string char by char:")
 					for j := 0; j < len(file.Path); j++ {
