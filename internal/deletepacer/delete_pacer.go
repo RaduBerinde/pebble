@@ -260,7 +260,7 @@ func (dp *DeletePacer) mainLoop() {
 			//		panic(fmt.Sprintf("!!!!!!!!!!!!!!!!!!!  v: %q  file.Path: %q\n", v, file.Path))
 			//	}
 			//}
-			//runtime.GC()
+			runtime.GC()
 			fmt.Printf("\n\nGC after pop done\n")
 			//stack1 = stack1[:runtime.Stack(stack1[:cap(stack1)], true)]
 			//fmt.Printf("popped %p\n", unsafe.StringData(file.Path))
@@ -294,7 +294,7 @@ func (dp *DeletePacer) mainLoop() {
 					stopTheWorld(0)
 
 					fmt.Printf("LOCKED POISON! (iteration %d) [%p, %d)\n", i, unsafe.StringData(file.Path), len(file.Path))
-					printTraceBuf()
+					//printTraceBuf()
 
 					fmt.Printf("string char by char:")
 					for j := 0; j < len(file.Path); j++ {
