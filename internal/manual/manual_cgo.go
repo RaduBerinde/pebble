@@ -7,6 +7,8 @@ package manual
 // #include <stdlib.h>
 import "C"
 import (
+	"fmt"
+	"sync"
 	"unsafe"
 
 	"github.com/cockroachdb/pebble/internal/invariants"
@@ -33,13 +35,25 @@ func throw(s string)
 // TODO(jackson): Confirm that the race detector does not detect races within
 // cgo-allocated memory.
 // var useGoAllocation = invariants.RaceEnabled && rand.Uint32()%2 == 0
-var useGoAllocation = false
+
+var useGoAllocation = true
 
 // TODO(peter): Rather than relying an C malloc/free, we could fork the Go
 // runtime page allocator and allocate large chunks of memory using mmap or
 // similar.
 
-const padding = 128
+const padding = 0
+
+var memtableBufs struct {
+	sync.Mutex
+	bufs [10][]byte
+}
+
+func init() {
+	for i := range memtableBufs.bufs {
+		memtableBufs.bufs[i] = make([]byte, 262144)
+	}
+}
 
 // New allocates a slice of size n. The returned slice is from manually
 // managed memory and MUST be released by calling Free. Failure to do so will
@@ -49,6 +63,18 @@ func New(purpose Purpose, n uintptr) Buf {
 		return Buf{}
 	}
 	recordAlloc(purpose, n)
+
+	if n == 262144 {
+		memtableBufs.Lock()
+		defer memtableBufs.Unlock()
+		for i, b := range memtableBufs.bufs {
+			if b != nil {
+				memtableBufs.bufs[i] = nil
+				return Buf{data: unsafe.Pointer(&b[0]), n: n}
+			}
+		}
+		panic("ran out of memtables")
+	}
 
 	// In race-enabled builds, we sometimes make allocations using Go to allow
 	// the race detector to observe concurrent memory access to memory allocated
@@ -80,6 +106,7 @@ func New(purpose Purpose, n uintptr) Buf {
 		*(*byte)(unsafe.Add(ptr, uintptr(i))) = 0xCC
 		*(*byte)(unsafe.Add(ptr, padding+n+uintptr(i))) = 0xCC
 	}
+	fmt.Printf("alloc %d %p purpose=%d\n", n, unsafe.Add(ptr, padding), purpose)
 	return Buf{data: unsafe.Add(ptr, padding), n: n}
 }
 
@@ -90,7 +117,7 @@ func Free(purpose Purpose, b Buf) {
 		invariants.MaybeMangle(b.Slice())
 		recordFree(purpose, b.n)
 
-		if !useGoAllocation {
+		if !useGoAllocation && b.n == 262144 {
 			ptr := unsafe.Pointer(uintptr(b.data) - padding)
 			for i := 0; i < padding; i++ {
 				if *(*byte)(unsafe.Add(ptr, i)) != 0xCC {
@@ -102,5 +129,6 @@ func Free(purpose Purpose, b Buf) {
 			}
 			C.free(ptr)
 		}
+		fmt.Printf("free %d %p purpose=%d\n", b.n, b.data, purpose)
 	}
 }
