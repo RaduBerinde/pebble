@@ -14,8 +14,6 @@ import (
 	"sync"
 	"time"
 	"unsafe"
-
-	"github.com/cockroachdb/crlib/crtime"
 )
 
 // DeleteFn is called to perform the actual deletion of an obsolete file. It
@@ -160,21 +158,12 @@ func (dp *DeletePacer) mainLoop() {
 	timer := time.NewTimer(time.Duration(0))
 	defer timer.Stop()
 
-	var lastMaxQueueLog crtime.Mono
 	dp.mu.Lock()
 	defer dp.mu.Unlock()
 	for {
 		if dp.mu.closed && dp.mu.queue.Len() == 0 {
 			return
 		}
-		now := crtime.NowMono()
-		if dp.mu.queue.Len() > maxQueueSize {
-			// The queue is getting out of hand; disable pacing.
-			if lastMaxQueueLog == 0 || now.Sub(lastMaxQueueLog) > time.Minute {
-				lastMaxQueueLog = now
-			}
-		}
-
 		// Processing priority:
 		//   1. Exit if closed and queue empty;
 		//   2. Wait for pacing debt to clear;

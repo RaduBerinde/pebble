@@ -4,11 +4,7 @@
 
 package deletepacer
 
-import (
-	"time"
-
-	"github.com/cockroachdb/crlib/crtime"
-)
+import "time"
 
 // history is a helper used to keep track of the recent history of a set of
 // data points (in our case deleted bytes), at limited granularity.
@@ -16,7 +12,7 @@ import (
 // are effectively rounded down to the nearest epoch boundary.
 type history struct {
 	epochDuration time.Duration
-	startTime     crtime.Mono
+	startTime     time.Duration
 	// currEpoch is the epoch of the most recent operation.
 	currEpoch int64
 	// val contains the recent epoch values.
