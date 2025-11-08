@@ -1,0 +1,37 @@
+# Test treesteps recording for levelIter SeekGE operation.
+# This test creates a DB with multiple sstables in L6 and performs a SeekGE
+# operation while recording the operation steps with treesteps.
+
+define
+L6
+  a.SET.10:va10
+  b.SET.8:vb8
+  c.SET.6:vc6
+L6
+  d.SET.15:vd15
+  d@10.SET.15:vd15
+  d@20.SET.15:vd15
+  e.SET.12:ve12
+  f.SET.9:vf9
+L6
+  g.SET.20:vg20
+  h.SET.18:vh18
+  i.SET.16:vi16
+----
+
+#iter-treesteps depth=2
+#seek-ge d
+#----
+#https://raduberinde.github.io/treesteps/decode.html#eJy8kLFKA0EQhnufYhgbheOMQiwOLIMIYhM7Nxwb7k9cspkcu4ONCKmsLbb06fZJZC85lDyAU_7___HBvPOT3YIbVkTtrNorpwitBiAq-th6vMG3JWxuJlzxXNEXJHLzwk6cOutLDGzuZ7QTGoAHRaCVExdf0fHigA1Ij-XSoy4Dq7tghHJKOe1z2tMWYe1kXTojNFxO38fSBoiNG_8XPU5G_lf9eGuEq3-TEeXPLzr84MJwZ7iiySXdUXd-Pa3ms-cRP9GsnEdDk3LTk8moqevaCC8-zn4CAAD__y7Dnz8=
+
+iter-treesteps depth=3
+seek-prefix-ge d@15
+next
+----
+foo
+https://raduberinde.github.io/treesteps/decode.html#eJzkVE1Lw0AQvfsrhvWiELRW4iFQ8FJEKCLUmyll607SpdvZsjtIQYSePHvI0V-XXyIbE1OLHz2IFJxTmJn33uTx2AdxJecoEsHoWUmWx5rRjdkhesaFHxu8RzMOzaQbi0gMGRcB4kVyKzRp1tKENuLs2mGmlxd9sAQV7JLRgWfpGJWIBFmF7SCBTBuETqgYjJWqWtok8p7lxOCR15QbHDRoydZBpkn76aewVv99afR2fHX4AieBtGFKCcqiKItVWaxgji7XlIdZSlBVWbzUQ-mQpJ-ZdWi90uBb6cFZSiL6MzGA8ukZ1p04SIVKRQSpUOen4aNzuIsXQVutVEhHUsdjY6WR-iYbHxDbMm_Qa1K4hImxd7MEyHId0n_i4FbK0APcP-lGw_7NbzgeHqDGcJtlHrnXAYOU87QXx7tn_Fe_v0sp_tHT0ePeawAAAP__WTMseA==
+
+iter-treesteps
+seek-prefix-ge d@10
+----
+https://raduberinde.github.io/treesteps/decode.html#eJzsVkGL2kAUvvdXPKYXhdBqxR4CQikVW5BSsLdGZGxe4pBxEmYeRSgLnva8hxz31-WXLBOTTdbdVXNYEcycZN73vff8vnnh_Wc_-RqZywgN-Zz4R0GoF6QRDWFiFhL_oVzYS3cwYA6bESaWYpj7hwklSHBprxGjXxoDsZmMIVaQ034QajDENaHPHKZiH6uAC4GQCD17hiBj7ueg_UTGEF9K_GCECiVOSzanuJ7aIEaT8XeUCerTWXlDB6AuCOXjBpYy_htVLR6nWeg3TvyrJXb6XYiDwCCNeiBRhbQaDYcNmw6EEmbVWKEDtMqhR9B8Z29ubYJLm7TM5CnI0jRLt1m6hTXqUKjQxjwF-cnS-yLINSpuIlmnFpCSX5WefvYUc85WDCC7vYO6Eh2P-R5zwGP-l4H90eteYkdQnaqUnR-3GKA9SFnqwNt4wjg181762ni4oGIqZuRKFGxeuZX5rWTegepf1E4VbX24bB_SF_trRT3r47bLX_m2n68rrR0N7IAR4Pv-J2c2_t06c1Znrlv41_7-Ja2MRzWd37x7CAAA__8aMS-V

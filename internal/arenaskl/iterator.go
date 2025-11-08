@@ -251,7 +251,7 @@ func (it *Iterator) SetContext(_ context.Context) {}
 
 // TreeStepsNode is part of the InternalIterator interface.
 func (it *Iterator) TreeStepsNode() treesteps.NodeInfo {
-	return treesteps.NodeInfof("%T(%p)", it, it)
+	return treesteps.NodeInfof("arenaskl.Iterator")
 }
 
 func (it *Iterator) decodeKey() {

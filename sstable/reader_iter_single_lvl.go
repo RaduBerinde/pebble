@@ -1392,7 +1392,13 @@ func (i *singleLevelIterator[I, PI, D, PD]) lastInternal() *base.InternalKV {
 // package.
 // Note: compactionIterator.Next mirrors the implementation of Iterator.Next
 // due to performance. Keep the two in sync.
-func (i *singleLevelIterator[I, PI, D, PD]) Next() *base.InternalKV {
+func (i *singleLevelIterator[I, PI, D, PD]) Next() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "Next()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	// The SeekPrefixGE might have returned a synthetic key with latest suffix
 	// contained in the sstable. If the caller is calling Next(), that means
 	// they want to move past the synthetic key and Next() is responsible for
@@ -1520,7 +1526,13 @@ func (i *singleLevelIterator[I, PI, D, PD]) NextPrefix(succKey []byte) *base.Int
 
 // Prev implements internalIterator.Prev, as documented in the pebble
 // package.
-func (i *singleLevelIterator[I, PI, D, PD]) Prev() *base.InternalKV {
+func (i *singleLevelIterator[I, PI, D, PD]) Prev() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "Prev()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	// Clear the tracking flag since this is a relative positioning operation
 	i.lastOpWasSeekPrefixGE.Set(false)
 	if i.exhaustedBounds == -1 {
@@ -1753,14 +1765,28 @@ func (i *singleLevelIterator[I, PI, D, PD]) String() string {
 
 // TreeStepsNode is part of the InternalIterator interface.
 func (i *singleLevelIterator[I, PI, D, PD]) TreeStepsNode() treesteps.NodeInfo {
-	info := treesteps.NodeInfof("sstable.singleLevelIterator")
+	pos := "not positioned"
+	if PD(&i.data).Valid() {
+		pos = PD(&i.data).KV().K.String()
+	}
+	info := treesteps.NodeInfof("sstable.singleLevelIterator: %s", pos)
+	if i.indexLoaded && !PI(&i.index).IsDataInvalidated() {
+		info.AddChildren(PI(&i.index))
+	}
+	if !PD(&i.data).IsDataInvalidated() {
+		info.AddChildren(PD(&i.data))
+	}
+	//switch {
+	//case !i.indexLoaded || PI(&i.index).IsDataInvalidated():
+	//	info.AddPropf("status", "index not loaded")
+	//case PD(&i.data).IsDataInvalidated():
+	//	info.AddPropf("status", "data iterator invalid")
+	//case !PD(&i.data).Valid():
+	//	info.AddPropf("status", "data iterator not positioned")
+	//default:
+	//	info.AddPropf("at key", "%s", PD(&i.data).KV().K.String())
+	//}
 	info.AddPropf("file", "%s", i.String())
-	if !i.indexLoaded || PI(&i.index).IsDataInvalidated() {
-		info.AddPropf("index block", "not loaded")
-	}
-	if !PD(&i.data).IsDataInvalidated() && !PD(&i.data).IsDataInvalidated() {
-		info.AddPropf("data block", "offset=%d length=%d", i.dataBH.Offset, i.dataBH.Length)
-	}
 	return info
 }
 

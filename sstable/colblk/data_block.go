@@ -1460,7 +1460,11 @@ func (i *DataBlockIter) String() string {
 
 // TreeStepsNode is part of the InternalIterator interface.
 func (i *DataBlockIter) TreeStepsNode() treesteps.NodeInfo {
-	return treesteps.NodeInfof("%T(%p)", i, i)
+	pos := "not positioned"
+	if i.Valid() {
+		pos = i.kv.K.String()
+	}
+	return treesteps.NodeInfof("colblk.DataBlockIter: %s", pos)
 }
 
 // decodeRow decodes i.row into i.kv. If i.row is invalid, it returns nil.

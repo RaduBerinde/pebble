@@ -259,9 +259,13 @@ func (i *twoLevelIterator[I, PI, D, PD]) String() string {
 
 // TreeStepsNode is part of the InternalIterator interface.
 func (i *twoLevelIterator[I, PI, D, PD]) TreeStepsNode() treesteps.NodeInfo {
-	info := treesteps.NodeInfof("sstable.twoLevelIterator")
-	if !i.topLevelIndexLoaded {
-		info.AddPropf("top-level index block", "not loaded")
+	pos := "not positioned"
+	if PD(&i.secondLevel.data).Valid() {
+		pos = PD(&i.secondLevel.data).KV().K.String()
+	}
+	info := treesteps.NodeInfof("sstable.twoLevelIterator: %s", pos)
+	if i.topLevelIndexLoaded {
+		info.AddChildren(PI(&i.topLevelIndex))
 	}
 	info.AddChildren(&i.secondLevel)
 	return info
@@ -957,7 +961,13 @@ func (i *twoLevelIterator[I, PI, D, PD]) Last() (kv *base.InternalKV) {
 // package.
 // Note: twoLevelCompactionIterator.Next mirrors the implementation of
 // twoLevelIterator.Next due to performance. Keep the two in sync.
-func (i *twoLevelIterator[I, PI, D, PD]) Next() *base.InternalKV {
+func (i *twoLevelIterator[I, PI, D, PD]) Next() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "Next()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	// The SeekPrefixGE might have returned a synthetic key with latest suffix
 	// contained in the sstable. If the caller is calling Next(), that means
 	// they want to move past the synthetic key and Next() is responsible for
@@ -1052,7 +1062,13 @@ func (i *twoLevelIterator[I, PI, D, PD]) NextPrefix(succKey []byte) *base.Intern
 
 // Prev implements internalIterator.Prev, as documented in the pebble
 // package.
-func (i *twoLevelIterator[I, PI, D, PD]) Prev() *base.InternalKV {
+func (i *twoLevelIterator[I, PI, D, PD]) Prev() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(i) {
+		op := treesteps.StartOpf(i, "Prev()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	i.lastOpWasSeekPrefixGE.Set(false)
 	// Seek optimization only applies until iterator is first positioned after SetBounds.
 	i.secondLevel.boundsCmp = 0

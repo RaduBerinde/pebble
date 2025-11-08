@@ -608,6 +608,9 @@ func (l *levelIter) loadFile(file *manifest.TableMetadata, dir int) loadFileRetu
 			// Relinquish iters.rangeDeletion to the caller.
 			l.rangeDelIterSetter.setRangeDelIter(iters.rangeDeletion)
 		}
+		if treesteps.Enabled && treesteps.IsRecording(l) {
+			treesteps.NodeUpdated(l, fmt.Sprintf("file %s loaded", l.iterFile.TableNum))
+		}
 		return newFileLoaded
 	}
 }
@@ -632,7 +635,13 @@ func (l *levelIter) verify(kv *base.InternalKV) *base.InternalKV {
 	return kv
 }
 
-func (l *levelIter) SeekGE(key []byte, flags base.SeekGEFlags) *base.InternalKV {
+func (l *levelIter) SeekGE(key []byte, flags base.SeekGEFlags) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(l) {
+		op := treesteps.StartOpf(l, "SeekGE(%q, %d)", key, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	if invariants.Enabled && l.lower != nil && l.comparer.Compare(key, l.lower) < 0 {
 		panic(errors.AssertionFailedf("levelIter SeekGE to key %q violates lower bound %q", key, l.lower))
 	}
@@ -658,7 +667,13 @@ func (l *levelIter) SeekGE(key []byte, flags base.SeekGEFlags) *base.InternalKV 
 	return l.verify(l.skipEmptyFileForward())
 }
 
-func (l *levelIter) SeekPrefixGE(prefix, key []byte, flags base.SeekGEFlags) *base.InternalKV {
+func (l *levelIter) SeekPrefixGE(prefix, key []byte, flags base.SeekGEFlags) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(l) {
+		op := treesteps.StartOpf(l, "SeekPrefixGE(%q, %q, %d)", prefix, key, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	if invariants.Enabled && l.lower != nil && l.comparer.Compare(key, l.lower) < 0 {
 		panic(errors.AssertionFailedf("levelIter SeekGE to key %q violates lower bound %q", key, l.lower))
 	}
@@ -687,7 +702,13 @@ func (l *levelIter) SeekPrefixGE(prefix, key []byte, flags base.SeekGEFlags) *ba
 	return l.verify(l.skipEmptyFileForward())
 }
 
-func (l *levelIter) SeekLT(key []byte, flags base.SeekLTFlags) *base.InternalKV {
+func (l *levelIter) SeekLT(key []byte, flags base.SeekLTFlags) (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(l) {
+		op := treesteps.StartOpf(l, "SeekLT(%q, %d)", key, flags)
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	if invariants.Enabled && l.upper != nil && l.comparer.Compare(key, l.upper) > 0 {
 		panic(errors.AssertionFailedf("levelIter SeekLT to key %q violates upper bound %q", key, l.upper))
 	}
@@ -708,7 +729,13 @@ func (l *levelIter) SeekLT(key []byte, flags base.SeekLTFlags) *base.InternalKV 
 	return l.verify(l.skipEmptyFileBackward())
 }
 
-func (l *levelIter) First() *base.InternalKV {
+func (l *levelIter) First() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(l) {
+		op := treesteps.StartOpf(l, "First()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	if invariants.Enabled && l.lower != nil {
 		panic(errors.AssertionFailedf("levelIter First called while lower bound %q is set", l.lower))
 	}
@@ -729,7 +756,13 @@ func (l *levelIter) First() *base.InternalKV {
 	return l.verify(l.skipEmptyFileForward())
 }
 
-func (l *levelIter) Last() *base.InternalKV {
+func (l *levelIter) Last() (kv *base.InternalKV) {
+	if treesteps.Enabled && treesteps.IsRecording(l) {
+		op := treesteps.StartOpf(l, "Last()")
+		defer func() {
+			op.Finishf("= %s", kv.String())
+		}()
+	}
 	if invariants.Enabled && l.upper != nil {
 		panic(errors.AssertionFailedf("levelIter Last called while upper bound %q is set", l.upper))
 	}
@@ -952,11 +985,9 @@ func (l *levelIter) SetContext(ctx context.Context) {
 
 // TreeStepsNode is part of the InternalIterator interface.
 func (l *levelIter) TreeStepsNode() treesteps.NodeInfo {
-	info := treesteps.NodeInfof("%T(%p) %s", l, l, l.layer)
+	info := treesteps.NodeInfof("levelIter %s", l.layer)
 	if l.iterFile != nil {
 		info.AddPropf("file", "%s", l.iterFile.TableNum)
-	} else {
-		info.AddPropf("file", "<none>")
 	}
 	info.AddChildren(l.iter)
 	return info

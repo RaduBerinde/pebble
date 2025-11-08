@@ -1332,7 +1332,7 @@ func (m *mergingIter) SetContext(ctx context.Context) {
 
 // TreeStepsNode is part of the InternalIterator interface.
 func (m *mergingIter) TreeStepsNode() treesteps.NodeInfo {
-	info := treesteps.NodeInfof("%T(%p)", m, m)
+	info := treesteps.NodeInfof("mergingIter")
 	for i := range m.levels {
 		info.AddChildren(m.levels[i].iter)
 	}

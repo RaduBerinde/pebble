@@ -3152,7 +3152,10 @@ var _ treesteps.Node = (*Iterator)(nil)
 
 // TreeStepsNode implements the treesteps.Node interface.
 func (i *Iterator) TreeStepsNode() treesteps.NodeInfo {
-	info := treesteps.NodeInfof("%T(%p)", i, i)
-	info.AddChildren(i.iter, i.pointIter)
+	info := treesteps.NodeInfof("pebble.Iterator")
+	info.AddChildren(i.iter)
+	if i.pointIter != i.iter {
+		info.AddChildren(i.pointIter)
+	}
 	return info
 }

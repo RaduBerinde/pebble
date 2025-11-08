@@ -52,8 +52,9 @@ root
  │    │    ├── 1.3.1
  │    │    │   1.3.1a
  │    │    └── 1.3.2
- │    │        1.3.2a
- │    │         │
+ │    │         │ 1.3.2a
+ │    │         │ 1.3.2b
+ │    │         │ 1.3.2c
  │    │         └── 1.3.1.1
  │    │             1.3.1.1a
  │    └── 1.4
@@ -207,3 +208,14 @@ tree of trees
 		t.Errorf("incorrect result:\n%s", res)
 	}
 }
+
+const _ = `
+sstable.twoLevelIterator: a@10#1,SET  ← SeekPrefixGE("a", "a", 0) = a@10#1,SET
+ ├── colblk.IndexIter: c@7
+ └── sstable.singleLevelIterator
+      |  a@10#1,SET
+      |  file: 000000
+      |
+      ├── colblk.IndexIter: a@10
+      └── colblk.DataBlockIter: a@10#1,SET
+`

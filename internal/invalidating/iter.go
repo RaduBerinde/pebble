@@ -7,16 +7,29 @@ package invalidating
 import (
 	"context"
 	"slices"
+	"sync/atomic"
 
 	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/invariants"
 	"github.com/cockroachdb/pebble/internal/treesteps"
 )
 
+var disabled atomic.Bool
+
+// Disable disables MaybeWrapIfInvariants().
+func Disable() {
+	disabled.Store(true)
+}
+
+// Enable re-enables MaybeWrapIfInvariants().
+func Enable() {
+	disabled.Store(false)
+}
+
 // MaybeWrapIfInvariants wraps some iterators with an invalidating iterator.
 // MaybeWrapIfInvariants does nothing in non-invariant builds.
 func MaybeWrapIfInvariants(iter base.InternalIterator) base.InternalIterator {
-	if invariants.Enabled && invariants.Sometimes(10) {
+	if invariants.Enabled && !disabled.Load() && invariants.Sometimes(10) {
 		return NewIter(iter)
 	}
 	return iter
@@ -166,7 +179,8 @@ func (i *iter) SetContext(ctx context.Context) {
 
 // TreeStepsNode is part of the InternalIterator interface.
 func (i *iter) TreeStepsNode() treesteps.NodeInfo {
-	info := treesteps.NodeInfof("%T(%p)", i, i)
+	// Empty node info means that this node will be hidden.
+	info := treesteps.NodeInfof("")
 	info.AddChildren(i.iter)
 	return info
 }
