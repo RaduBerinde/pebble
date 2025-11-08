@@ -1,0 +1,56 @@
+# Test treesteps recording for levelIter SeekGE operation.
+# This test creates a DB with multiple sstables in L6 and performs a SeekGE
+# operation while recording the operation steps with treesteps.
+
+define
+L1
+  a#10,SET:va
+  b#10,SET:vb
+  c#10,SET:vc
+L1
+  d#5,SET:vd
+  d@10#5,SET:vd10
+  d@20#5,SET:vd20
+  e#5,SET:ve
+  f#5,SET:vf
+L1
+  g#1,SET:vg
+  h#1,SET:vh
+  i#1,SET:vi
+----
+L1:
+  000004:[a#10,SET-c#10,SET] seqnums:[10-10] points:[a#10,SET-c#10,SET] size:471
+  000005:[d#5,SET-f#5,SET] seqnums:[5-5] points:[d#5,SET-f#5,SET] size:491
+  000006:[g#1,SET-i#1,SET] seqnums:[1-1] points:[g#1,SET-i#1,SET] size:471
+
+level-iter depth=1
+seek-ge b
+next
+next
+next
+next
+next
+next
+next
+----
+b#10,SET:vb
+c#10,SET:vc
+d#5,SET:vd
+d@20#5,SET:vd20
+d@10#5,SET:vd10
+e#5,SET:ve
+f#5,SET:vf
+g#1,SET:vg
+https://raduberinde.github.io/treesteps/decode.html#eNrslkGL1DAUx-9-ikfmsgtF29WZQ2HByyrCspf1Zpcl076uwZoOzVMEERYPXrx4mM_hh5pPIs3skGk3lTJNIA72NLw07__v_5dk8pVd8Y_IUkaoqODEn1GDqAhX6rbCz1jdCsImPVuwiF0Trtq3FUvfMSEFCV61ZcQPry-glqAnvCFsQBFvCAsWMVkXaAZSKEWFELfPC6hqXuiXTAuliC8rfKqEvKvwcjePU91AKaRQ73sTjObe8BV-oSFDu7GRSo9b-dEZzmlucnolGhWi-f86_-riWnhZXDfbw0IfFGb4MskkizoFgM2PX7DdzScZW2Ysgvh09GuwWX_XH5M-HCm6tN6s7zfr-799Rybh4ZE1wapWgkQtsTD1blfffuwN4RyWsySOri_e7oy1ApxSa70nvK3__D3SfVdsarDufLbL7OT0uCztt4FzyAcg546cdiVc5ZiHhzYPDm32KY6f51JU-gfuG7OfPO4sz70chnNfLrZt9J-QTq6YzW17wlLuqY3dEqbT1OAcezsqR_3QX57FA2CtI4ey3W_mLExnDo_N1KP0k0HIiUvIiQ_ISYiQk-Ago50wOsOLztlicGAxNKqlnWrpjGrpnGoZHNUyNKpTb6ETLC-83EIXvlz0b6F3s8S2HyzlntrY_WA6TQ3uIG833578CQAA__83UpYA
+
+level-iter depth=1
+seek-prefix-ge d@10
+next
+next-prefix
+next-prefix
+----
+d@10#5,SET:vd10
+e#5,SET:ve
+f#5,SET:vf
+.
+https://raduberinde.github.io/treesteps/decode.html#eNrcVc1K60AU3t-nOMzdtBDuTbm3XQQCd1MuQilC3TmljOZEB8dJyRylIEJx4caNizyHD5UnkSQt-TEN1aZYOqvJ-fm-78z5IA9sLG6ROYzQkCdI_KYQ0RDOzUzhPaqZJAydvwNmsQnhPKk2zDlnUkuSQiVhxJvTEH25-D-EQEPadkIYgiEREnrMYjrwME844EuFYCenDyoQXlpUBTKGxIXCX0bqK4WjdbegIARfammua9ty_kLRGBe0Sdw6tyXfR6hKMhPTxJZXfIKzDvYAmKeZMVJT5OlRj2tmlQIA8fMrFLfV4cz717M5syC_2d1dOiGOnlJ3OSt7paEojpZxtGyamWtYHR0QzAMjSQYavTxeRv0GiVtzgAvJx8--NRmerQdIWAU5GzIVPVn85e3rc1Y17LqXNuUnnu50j01UEQZcwPr1Yzs6SwRtPWMr2jJfdjhDzhe2zVn3qBU2wYILfr0L_P3MUSJs683b1ervwRWHp7AJFlzgd7b951JLlV6wKLz-79fWSBu4C9ADrtn08cd7AAAA__-TCJ3L
