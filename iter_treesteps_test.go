@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/cockroachdb/datadriven"
+	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/cockroachdb/pebble/internal/itertest"
 	"github.com/cockroachdb/pebble/internal/manifest"
 	"github.com/cockroachdb/pebble/internal/testkeys"
@@ -25,9 +26,11 @@ func TestIterTreeSteps(t *testing.T) {
 		t.Skip("treesteps not available in this build")
 	}
 
-	t.Run("level_iter", func(t *testing.T) {
-		testIterTreeSteps(t, "testdata/treesteps_level_iter")
-	})
+	for _, name := range []string{"level_iter", "merging_iter"} {
+		t.Run(name, func(t *testing.T) {
+			testIterTreeSteps(t, "testdata/treesteps_"+name)
+		})
+	}
 }
 
 func testIterTreeSteps(t *testing.T, testdataPath string) {
@@ -47,8 +50,10 @@ func testIterTreeSteps(t *testing.T, testdataPath string) {
 				d = nil
 			}
 			opts := &Options{
-				Comparer: testkeys.Comparer,
-				FS:       vfs.NewMem(),
+				Comparer:                    testkeys.Comparer,
+				FS:                          vfs.NewMem(),
+				FormatMajorVersion:          FormatNewest,
+				DisableAutomaticCompactions: true,
 			}
 			var err error
 			d, err = runDBDefineCmd(td, opts)
@@ -62,6 +67,27 @@ func testIterTreeSteps(t *testing.T, testdataPath string) {
 			defer iter.Close()
 			rec := treeStepsStartRecording(t, td, iter)
 			out := itertest.RunInternalIterCmd(t, td, iter, itertest.Verbose)
+			url := rec.Finish().URL()
+			return out + url.String()
+
+		case "merging-iter":
+			v := d.DebugCurrentVersion()
+			levelIters := make([]mergingIterLevel, 0, len(v.Levels))
+			for l := 1; l < len(v.Levels); l++ {
+				if v.Levels[l].Empty() {
+					continue
+				}
+				var opts IterOptions
+				li := newLevelIter(t.Context(), opts, testkeys.Comparer, d.newIters, v.Levels[l].Iter(), manifest.Level(l), internalIterOpts{})
+				levelIters = append(levelIters, mergingIterLevel{iter: li})
+				li.initRangeDel(&levelIters[len(levelIters)-1])
+			}
+			miter := &mergingIter{}
+			var stats base.InternalIteratorStats
+			miter.init(nil /* opts */, &stats, d.cmp, d.split, levelIters...)
+			defer miter.Close()
+			rec := treeStepsStartRecording(t, td, miter)
+			out := itertest.RunInternalIterCmd(t, td, miter, itertest.Verbose)
 			url := rec.Finish().URL()
 			return out + url.String()
 
