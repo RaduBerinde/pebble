@@ -6,9 +6,11 @@ package bloom
 
 import (
 	crand "crypto/rand"
+	"fmt"
 	"strings"
 	"testing"
 
+	"github.com/cockroachdb/pebble/internal/base"
 	"github.com/stretchr/testify/require"
 )
 
@@ -210,13 +212,25 @@ func BenchmarkBloomFilterWriter(b *testing.B) {
 		keys[i] = make([]byte, keyLen)
 		_, _ = crand.Read(keys[i])
 	}
-	b.ResetTimer()
-	policy := FilterPolicy(10)
-	for i := 0; i < b.N; i++ {
-		w := policy.NewWriter()
-		for _, key := range keys {
-			w.AddKey(key)
-		}
-		w.Finish()
+	for fam, famStr := range []string{"original", "two-blocks"} {
+		b.Run(famStr, func(b *testing.B) {
+			for _, bpk := range []uint32{5, 10, 15, 20} {
+				b.Run(fmt.Sprintf("bpk=%d", bpk), func(b *testing.B) {
+					var policy base.TableFilterPolicy
+					if fam == 0 {
+						policy = FilterPolicy(bpk)
+					} else {
+						policy = TwoBlocksFilterPolicy(bpk)
+					}
+					for i := 0; i < b.N; i++ {
+						w := policy.NewWriter()
+						for _, key := range keys {
+							w.AddKey(key)
+						}
+						w.Finish()
+					}
+				})
+			}
+		})
 	}
 }
