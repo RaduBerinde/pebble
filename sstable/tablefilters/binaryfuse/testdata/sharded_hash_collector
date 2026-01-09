@@ -1,0 +1,79 @@
+# Test basic initialization.
+init
+----
+globalDepth=0
+  [0]      localDepth=0 hashes: (empty)
+
+# Add a few hashes to single shard.
+add
+0/1
+0/2
+0/3
+----
+globalDepth=0
+  [0]      localDepth=0 hashes: 0/1-3
+
+# Add more hashes with different shard bits (still goes to single shard).
+add
+1/10
+2/20
+3/30
+----
+globalDepth=0
+  [0]      localDepth=0 hashes: 0/1-3 1/10 2/20 3/30
+
+# Reset and start fresh.
+reset
+----
+globalDepth=0
+  [0]      localDepth=0 hashes: (empty)
+
+# Add enough hashes to trigger a split (threshold is 2^18 = 262144).
+# Use shard bits 0 (0000) and 8 (1000) which differ in the top bit,
+# so they separate at globalDepth=1.
+add
+0/1-140000
+8/1-140000
+----
+globalDepth=1
+  [0]      localDepth=1 hashes: 0/1-140000
+  [1]      localDepth=1 hashes: 8/1-140000
+
+# Add more to shard 0 to trigger another split.
+# Use bits 0 (0000) and 4 (0100) which differ in bit 2.
+add
+0/140001-200000
+4/1-80000
+----
+globalDepth=2
+  [0]      localDepth=2 hashes: 0/1-200000
+  [1]      localDepth=2 hashes: 4/1-80000
+  [2-3]    localDepth=1 hashes: 8/1-140000
+
+# Add hashes to other shards.
+add
+12/1-100000
+----
+globalDepth=2
+  [0]      localDepth=2 hashes: 0/1-200000
+  [1]      localDepth=2 hashes: 4/1-80000
+  [2-3]    localDepth=1 hashes: 8/1-140000 12/1-100000
+
+# Reset again.
+reset
+----
+globalDepth=0
+  [0]      localDepth=0 hashes: (empty)
+
+# Test with bits that are close together (0 and 1) - they need globalDepth=4
+# to be separated since they only differ in the lowest bit.
+add
+0/1-140000
+1/1-140000
+----
+globalDepth=4
+  [0]      localDepth=4 hashes: 0/1-140000
+  [1]      localDepth=4 hashes: 1/1-140000
+  [2-3]    localDepth=3 hashes: (empty)
+  [4-7]    localDepth=2 hashes: (empty)
+  [8-15]   localDepth=1 hashes: (empty)
