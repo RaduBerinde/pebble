@@ -284,3 +284,7 @@ func BenchmarkMayContain(b *testing.B) {
 		})
 	}
 }
+
+func BenchmarkMayContainLarge(b *testing.B) {
+	filtertestutils.BenchmarkMayContainLarge(b, FilterPolicy(10), Decoder)
+}
